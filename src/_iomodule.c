@@ -1,9 +1,21 @@
 #include <Python.h>
 #include <FLAC/stream_decoder.h>
 
-/* Common exception type */
+/****************************************************************/
 
 static PyObject *ErrorObject;
+
+static FLAC__uint64
+Long_AsUint64(PyObject *n)
+{
+    unsigned long long v = PyLong_AsUnsignedLongLong(n);
+    if (v > (FLAC__uint64) -1 && !PyErr_Occurred()) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large to convert to uint64");
+        return (FLAC__uint64) -1;
+    }
+    return v;
+}
 
 /****************************************************************/
 /* Decoder objects */
@@ -12,6 +24,7 @@ typedef struct {
     PyObject_HEAD
     PyObject            *fileobj;
     FLAC__StreamDecoder *decoder;
+    char                 seekable;
     char                 eof;
 } DecoderObject;
 
@@ -57,7 +70,21 @@ decoder_seek(const FLAC__StreamDecoder *decoder,
              FLAC__uint64               absolute_byte_offset,
              void                      *client_data)
 {
-    return FLAC__STREAM_DECODER_SEEK_STATUS_ERROR;
+    DecoderObject *self = client_data;
+    PyObject *dummy;
+
+    if (!self->seekable)
+        return FLAC__STREAM_DECODER_SEEK_STATUS_UNSUPPORTED;
+
+    self->eof = 0;
+    dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
+                                (unsigned long long) absolute_byte_offset);
+    Py_XDECREF(dummy);
+
+    if (PyErr_Occurred())
+        return FLAC__STREAM_DECODER_SEEK_STATUS_ERROR;
+    else
+        return FLAC__STREAM_DECODER_SEEK_STATUS_OK;
 }
 
 static FLAC__StreamDecoderTellStatus
@@ -65,7 +92,23 @@ decoder_tell(const FLAC__StreamDecoder *decoder,
              FLAC__uint64              *absolute_byte_offset,
              void                      *client_data)
 {
-    return FLAC__STREAM_DECODER_TELL_STATUS_ERROR;
+    DecoderObject *self = client_data;
+    PyObject *result;
+    FLAC__uint64 pos;
+
+    if (!self->seekable)
+        return FLAC__STREAM_DECODER_TELL_STATUS_UNSUPPORTED;
+
+    result = PyObject_CallMethod(self->fileobj, "tell", "()");
+    pos = result ? Long_AsUint64(result) : -1;
+    Py_XDECREF(result);
+
+    if (PyErr_Occurred()) {
+        return FLAC__STREAM_DECODER_TELL_STATUS_ERROR;
+    } else {
+        *absolute_byte_offset = pos;
+        return FLAC__STREAM_DECODER_TELL_STATUS_OK;
+    }
 }
 
 static FLAC__StreamDecoderLengthStatus
@@ -73,7 +116,29 @@ decoder_length(const FLAC__StreamDecoder *decoder,
                FLAC__uint64              *stream_length,
                void                      *client_data)
 {
-    return FLAC__STREAM_DECODER_LENGTH_STATUS_ERROR;
+    DecoderObject *self = client_data;
+    PyObject *oldpos = NULL, *newpos = NULL, *dummy = NULL;
+    FLAC__uint64 pos;
+
+    if (!self->seekable)
+        return FLAC__STREAM_DECODER_LENGTH_STATUS_UNSUPPORTED;
+
+    oldpos = PyObject_CallMethod(self->fileobj, "tell", "()");
+    if (oldpos != NULL)
+        newpos = PyObject_CallMethod(self->fileobj, "seek", "(ii)", 0, 2);
+    if (newpos != NULL)
+        dummy = PyObject_CallMethod(self->fileobj, "seek", "(O)", oldpos);
+    pos = newpos ? Long_AsUint64(newpos) : -1;
+    Py_XDECREF(oldpos);
+    Py_XDECREF(newpos);
+    Py_XDECREF(dummy);
+
+    if (PyErr_Occurred()) {
+        return FLAC__STREAM_DECODER_LENGTH_STATUS_ERROR;
+    } else {
+        *stream_length = pos;
+        return FLAC__STREAM_DECODER_LENGTH_STATUS_OK;
+    }
 }
 
 static FLAC__bool
@@ -112,6 +177,7 @@ newDecoderObject(PyObject *fileobj)
 {
     DecoderObject *self;
     FLAC__StreamDecoderInitStatus status;
+    PyObject *seekable;
 
     self = PyObject_New(DecoderObject, &Decoder_Type);
     if (self == NULL)
@@ -121,6 +187,14 @@ newDecoderObject(PyObject *fileobj)
     self->eof = 0;
     self->fileobj = fileobj;
     Py_XINCREF(self->fileobj);
+
+    seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
+    self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
+    Py_XDECREF(seekable);
+    if (PyErr_Occurred()) {
+        Py_XDECREF(self);
+        return NULL;
+    }
 
     if (self->decoder == NULL) {
         PyErr_NoMemory();
@@ -170,10 +244,11 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
     ok = FLAC__stream_decoder_process_until_end_of_metadata(self->decoder);
 
     state = FLAC__stream_decoder_get_state(self->decoder);
-    if (state == FLAC__STREAM_DECODER_ABORTED) {
+    if (state == FLAC__STREAM_DECODER_ABORTED)
         FLAC__stream_decoder_flush(self->decoder);
+
+    if (PyErr_Occurred())
         return NULL;
-    }
 
     if (!ok) {
         PyErr_Format(ErrorObject, "read_metadata failed (state = %s)",
@@ -185,9 +260,45 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
     return Py_None;
 }
 
+static PyObject *
+Decoder_seek_absolute(DecoderObject *self, PyObject *args)
+{
+    PyObject *arg = NULL;
+    FLAC__uint64 sample_number;
+    FLAC__bool ok;
+    FLAC__StreamDecoderState state;
+
+    if (!PyArg_ParseTuple(args, "O:seek_absolute", &arg))
+        return NULL;
+    sample_number = Long_AsUint64(arg);
+    if (PyErr_Occurred())
+        return NULL;
+
+    ok = FLAC__stream_decoder_seek_absolute(self->decoder, sample_number);
+
+    state = FLAC__stream_decoder_get_state(self->decoder);
+    if ((state == FLAC__STREAM_DECODER_ABORTED ||
+         state == FLAC__STREAM_DECODER_SEEK_ERROR))
+        FLAC__stream_decoder_flush(self->decoder);
+
+    if (PyErr_Occurred())
+        return NULL;
+
+    if (!ok) {
+        PyErr_Format(ErrorObject, "seek_absolute failed (state = %s)",
+                     FLAC__StreamDecoderStateString[state]);
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
 static PyMethodDef Decoder_methods[] = {
     {"read_metadata", (PyCFunction)Decoder_read_metadata, METH_VARARGS,
      PyDoc_STR("read_metadata() -> None")},
+    {"seek_absolute", (PyCFunction)Decoder_seek_absolute, METH_VARARGS,
+     PyDoc_STR("seek_absolute(sample_number) -> None")},
     {NULL, NULL}
 };
 
