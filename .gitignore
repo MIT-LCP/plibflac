@@ -1,0 +1,17 @@
+*~
+*#
+*.patch
+*.orig
+*.rej
+
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+
+*.pyc
+*.egg-info/
+build/
+__pycache__/

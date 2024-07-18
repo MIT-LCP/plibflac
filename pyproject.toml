@@ -1,0 +1,7 @@
+[project]
+name = "plibflac"
+version = "0.0.1"
+
+[build-system]
+requires = ["setuptools"]
+build_backend = "setuptools.build_meta"
