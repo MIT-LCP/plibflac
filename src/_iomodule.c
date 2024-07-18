@@ -12,27 +12,139 @@ typedef struct {
     PyObject_HEAD
     PyObject            *fileobj;
     FLAC__StreamDecoder *decoder;
+    char                 eof;
 } DecoderObject;
 
 static PyTypeObject Decoder_Type;
+
+static FLAC__StreamDecoderReadStatus
+decoder_read(const FLAC__StreamDecoder *decoder,
+             FLAC__byte                 buffer[],
+             size_t                    *bytes,
+             void                      *client_data)
+{
+    DecoderObject *self = client_data;
+    size_t remaining = *bytes, n;
+    PyObject *memview, *count;
+
+    *bytes = 0;
+    while (remaining > 0) {
+        memview = PyMemoryView_FromMemory(buffer, remaining, PyBUF_WRITE);
+        count = PyObject_CallMethod(self->fileobj, "readinto", "(O)", memview);
+        n = count ? PyLong_AsSize_t(count) : (size_t) -1;
+        Py_XDECREF(memview);
+        Py_XDECREF(count);
+
+        if (PyErr_Occurred()) {
+            return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
+        } else if (n == 0) {
+            self->eof = 1;
+            return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
+        } else if (n <= remaining) {
+            buffer += n;
+            *bytes += n;
+            remaining -= n;
+        } else {
+            PyErr_SetString(PyExc_ValueError, "invalid result from readinto");
+            return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
+        }
+    }
+    return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
+}
+
+static FLAC__StreamDecoderSeekStatus
+decoder_seek(const FLAC__StreamDecoder *decoder,
+             FLAC__uint64               absolute_byte_offset,
+             void                      *client_data)
+{
+    return FLAC__STREAM_DECODER_SEEK_STATUS_ERROR;
+}
+
+static FLAC__StreamDecoderTellStatus
+decoder_tell(const FLAC__StreamDecoder *decoder,
+             FLAC__uint64              *absolute_byte_offset,
+             void                      *client_data)
+{
+    return FLAC__STREAM_DECODER_TELL_STATUS_ERROR;
+}
+
+static FLAC__StreamDecoderLengthStatus
+decoder_length(const FLAC__StreamDecoder *decoder,
+               FLAC__uint64              *stream_length,
+               void                      *client_data)
+{
+    return FLAC__STREAM_DECODER_LENGTH_STATUS_ERROR;
+}
+
+static FLAC__bool
+decoder_eof(const FLAC__StreamDecoder *decoder,
+            void                      *client_data)
+{
+    DecoderObject *self = client_data;
+    return self->eof;
+}
+
+static FLAC__StreamDecoderWriteStatus
+decoder_write(const FLAC__StreamDecoder *decoder,
+              const FLAC__Frame         *frame,
+              const FLAC__int32 * const  buffer[],
+              void                      *client_data)
+{
+    return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
+}
+
+static void
+decoder_metadata(const FLAC__StreamDecoder  *decoder,
+                 const FLAC__StreamMetadata *metadata,
+                 void                       *client_data)
+{
+}
+
+static void
+decoder_error(const FLAC__StreamDecoder      *decoder,
+              FLAC__StreamDecoderErrorStatus  status,
+              void                           *client_data)
+{
+}
 
 static DecoderObject *
 newDecoderObject(PyObject *fileobj)
 {
     DecoderObject *self;
+    FLAC__StreamDecoderInitStatus status;
+
     self = PyObject_New(DecoderObject, &Decoder_Type);
     if (self == NULL)
         return NULL;
 
     self->decoder = FLAC__stream_decoder_new();
+    self->eof = 0;
+    self->fileobj = fileobj;
+    Py_XINCREF(self->fileobj);
+
     if (self->decoder == NULL) {
         PyErr_NoMemory();
-        PyObject_Free(self);
+        Py_XDECREF(self);
         return NULL;
     }
 
-    self->fileobj = fileobj;
-    Py_XINCREF(self->fileobj);
+    status = FLAC__stream_decoder_init_stream(self->decoder,
+                                              &decoder_read,
+                                              &decoder_seek,
+                                              &decoder_tell,
+                                              &decoder_length,
+                                              &decoder_eof,
+                                              &decoder_write,
+                                              &decoder_metadata,
+                                              &decoder_error,
+                                              self);
+
+    if (status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
+        PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
+                     FLAC__StreamDecoderInitStatusString[status]);
+        Py_XDECREF(self);
+        return NULL;
+    }
 
     return self;
 }
@@ -47,23 +159,41 @@ Decoder_dealloc(DecoderObject *self)
 }
 
 static PyObject *
-Decoder_read(DecoderObject *self, PyObject *args)
+Decoder_read_metadata(DecoderObject *self, PyObject *args)
 {
-    if (!PyArg_ParseTuple(args, ":read"))
+    FLAC__bool ok;
+    FLAC__StreamDecoderState state;
+
+    if (!PyArg_ParseTuple(args, ":read_metadata"))
         return NULL;
+
+    ok = FLAC__stream_decoder_process_until_end_of_metadata(self->decoder);
+
+    state = FLAC__stream_decoder_get_state(self->decoder);
+    if (state == FLAC__STREAM_DECODER_ABORTED) {
+        FLAC__stream_decoder_flush(self->decoder);
+        return NULL;
+    }
+
+    if (!ok) {
+        PyErr_Format(ErrorObject, "read_metadata failed (state = %s)",
+                     FLAC__StreamDecoderStateString[state]);
+        return NULL;
+    }
+
     Py_INCREF(Py_None);
     return Py_None;
 }
 
 static PyMethodDef Decoder_methods[] = {
-    {"read", (PyCFunction)Decoder_read, METH_VARARGS,
-        PyDoc_STR("read() -> None")},
+    {"read_metadata", (PyCFunction)Decoder_read_metadata, METH_VARARGS,
+     PyDoc_STR("read_metadata() -> None")},
     {NULL, NULL}
 };
 
 static PyTypeObject Decoder_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "plibflac.Decoder",         /*tp_name*/
+    "plibflac._io.Decoder",     /*tp_name*/
     sizeof(DecoderObject),      /*tp_basicsize*/
     0,                          /*tp_itemsize*/
     /* methods */
@@ -120,7 +250,7 @@ io_open_decoder(PyObject *self, PyObject *args)
 
 static PyMethodDef io_methods[] = {
     {"open_decoder", io_open_decoder, METH_VARARGS,
-        PyDoc_STR("open_decoder(fileobj) -> new Decoder object")},
+     PyDoc_STR("open_decoder(fileobj) -> new Decoder object")},
     {NULL, NULL}
 };
 
