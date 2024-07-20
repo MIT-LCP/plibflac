@@ -300,7 +300,7 @@ newDecoderObject(PyObject *fileobj)
     PyObject *seekable;
     unsigned int i;
 
-    self = PyObject_New(DecoderObject, (PyTypeObject *) Decoder_Type);
+    self = PyObject_GC_New(DecoderObject, (PyTypeObject *) Decoder_Type);
     if (self == NULL)
         return NULL;
 
@@ -308,6 +308,8 @@ newDecoderObject(PyObject *fileobj)
     self->eof = 0;
     self->fileobj = fileobj;
     Py_XINCREF(self->fileobj);
+
+    PyObject_GC_Track((PyObject *) self);
 
     for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
         self->out_byteobjs[i] = NULL;
@@ -373,6 +375,8 @@ static void
 Decoder_dealloc(DecoderObject *self)
 {
     unsigned int i;
+
+    PyObject_GC_UnTrack((PyObject *) self);
 
     for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
         Py_CLEAR(self->out_byteobjs[i]);
@@ -694,6 +698,8 @@ newEncoderObject(PyObject *fileobj)
     self->fileobj = fileobj;
     Py_XINCREF(self->fileobj);
 
+    PyObject_GC_Track((PyObject *) self);
+
     seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
     self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
     Py_XDECREF(seekable);
@@ -740,6 +746,8 @@ Encoder_clear(EncoderObject *self)
 static void
 Encoder_dealloc(EncoderObject *self)
 {
+    PyObject_GC_UnTrack((PyObject *) self);
+
     Py_CLEAR(self->fileobj);
 
     if (self->encoder)
