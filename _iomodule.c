@@ -64,32 +64,28 @@ decoder_read(const FLAC__StreamDecoder *decoder,
              void                      *client_data)
 {
     DecoderObject *self = client_data;
-    size_t remaining = *bytes, n;
+    size_t max = *bytes, n;
     PyObject *memview, *count;
 
-    *bytes = 0;
-    while (remaining > 0) {
-        memview = PyMemoryView_FromMemory(buffer, remaining, PyBUF_WRITE);
-        count = PyObject_CallMethod(self->fileobj, "readinto", "(O)", memview);
-        n = count ? PyLong_AsSize_t(count) : (size_t) -1;
-        Py_XDECREF(memview);
-        Py_XDECREF(count);
+    memview = PyMemoryView_FromMemory((void *) buffer, max, PyBUF_WRITE);
+    count = PyObject_CallMethod(self->fileobj, "readinto", "(O)", memview);
+    *bytes = n = count ? PyLong_AsSize_t(count) : (size_t) -1;
+    Py_XDECREF(memview);
+    Py_XDECREF(count);
 
-        if (PyErr_Occurred()) {
-            return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
-        } else if (n == 0) {
-            self->eof = 1;
-            return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
-        } else if (n <= remaining) {
-            buffer += n;
-            *bytes += n;
-            remaining -= n;
-        } else {
-            PyErr_SetString(PyExc_ValueError, "invalid result from readinto");
-            return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
-        }
+    if (PyErr_Occurred()) {
+        return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
+    } else if (n == 0) {
+        *bytes = 0;
+        self->eof = 1;
+        return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
+    } else if (n > max) {
+        PyErr_SetString(PyExc_ValueError, "invalid result from readinto");
+        return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
+    } else {
+        *bytes = n;
+        return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
     }
-    return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
 }
 
 static FLAC__StreamDecoderSeekStatus
