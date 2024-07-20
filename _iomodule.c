@@ -57,7 +57,7 @@ typedef struct {
     } out_attr, buf_attr;
 } DecoderObject;
 
-static PyTypeObject Decoder_Type;
+static PyObject *Decoder_Type;
 
 static FLAC__StreamDecoderReadStatus
 decoder_read(const FLAC__StreamDecoder *decoder,
@@ -299,7 +299,7 @@ newDecoderObject(PyObject *fileobj)
     PyObject *seekable;
     unsigned int i;
 
-    self = PyObject_New(DecoderObject, &Decoder_Type);
+    self = PyObject_New(DecoderObject, (PyTypeObject *) Decoder_Type);
     if (self == NULL)
         return NULL;
 
@@ -562,48 +562,21 @@ static PyMemberDef Decoder_members[] = {
     {NULL}
 };
 
-static PyTypeObject Decoder_Type = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "plibflac._io.Decoder",     /*tp_name*/
-    sizeof(DecoderObject),      /*tp_basicsize*/
-    0,                          /*tp_itemsize*/
-    /* methods */
-    (destructor)Decoder_dealloc,/*tp_dealloc*/
-    0,                          /*tp_vectorcall_offset*/
-    0,                          /*tp_getattr*/
-    0,                          /*tp_setattr*/
-    0,                          /*tp_as_async*/
-    0,                          /*tp_repr*/
-    0,                          /*tp_as_number*/
-    0,                          /*tp_as_sequence*/
-    0,                          /*tp_as_mapping*/
-    0,                          /*tp_hash*/
-    0,                          /*tp_call*/
-    0,                          /*tp_str*/
-    0,                          /*tp_getattro*/
-    0,                          /*tp_setattro*/
-    0,                          /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
-    0,                          /*tp_doc*/
-    (traverseproc)Decoder_traverse, /*tp_traverse*/
-    (inquiry)Decoder_clear,     /*tp_clear*/
-    0,                          /*tp_richcompare*/
-    0,                          /*tp_weaklistoffset*/
-    0,                          /*tp_iter*/
-    0,                          /*tp_iternext*/
-    Decoder_methods,            /*tp_methods*/
-    Decoder_members,            /*tp_members*/
-    0,                          /*tp_getset*/
-    0,                          /*tp_base*/
-    0,                          /*tp_dict*/
-    0,                          /*tp_descr_get*/
-    0,                          /*tp_descr_set*/
-    0,                          /*tp_dictoffset*/
-    0,                          /*tp_init*/
-    0,                          /*tp_alloc*/
-    0,                          /*tp_new*/
-    0,                          /*tp_free*/
-    0,                          /*tp_is_gc*/
+static PyType_Slot Decoder_Type_slots[] = {
+    {Py_tp_dealloc,  Decoder_dealloc},
+    {Py_tp_traverse, Decoder_traverse},
+    {Py_tp_clear,    Decoder_clear},
+    {Py_tp_methods,  Decoder_methods},
+    {Py_tp_members,  Decoder_members},
+    {0, 0}
+};
+
+static PyType_Spec Decoder_Type_spec = {
+    "plibflac._io.Decoder",
+    sizeof(DecoderObject),
+    0,
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    Decoder_Type_slots
 };
 
 static PyObject *
@@ -631,8 +604,11 @@ PyDoc_STRVAR(module_doc,
 static int
 io_exec(PyObject *m)
 {
-    if (PyType_Ready(&Decoder_Type) < 0)
-        return -1;
+    if (Decoder_Type == NULL) {
+        Decoder_Type = PyType_FromSpec(&Decoder_Type_spec);
+        if (Decoder_Type == NULL)
+            return -1;
+    }
 
     if (ErrorObject == NULL) {
         ErrorObject = PyErr_NewException("plibflac.error", NULL, NULL);
