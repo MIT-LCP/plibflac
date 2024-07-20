@@ -126,7 +126,7 @@ decoder_tell(const FLAC__StreamDecoder *decoder,
         return FLAC__STREAM_DECODER_TELL_STATUS_UNSUPPORTED;
 
     result = PyObject_CallMethod(self->fileobj, "tell", "()");
-    pos = result ? Long_AsUint64(result) : -1;
+    pos = result ? Long_AsUint64(result) : (FLAC__uint64) -1;
     Py_XDECREF(result);
 
     if (PyErr_Occurred()) {
@@ -154,7 +154,7 @@ decoder_length(const FLAC__StreamDecoder *decoder,
         newpos = PyObject_CallMethod(self->fileobj, "seek", "(ii)", 0, 2);
     if (newpos != NULL)
         dummy = PyObject_CallMethod(self->fileobj, "seek", "(O)", oldpos);
-    pos = newpos ? Long_AsUint64(newpos) : -1;
+    pos = newpos ? Long_AsUint64(newpos) : (FLAC__uint64) -1;
     Py_XDECREF(oldpos);
     Py_XDECREF(newpos);
     Py_XDECREF(dummy);
