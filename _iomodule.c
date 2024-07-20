@@ -3,6 +3,8 @@
 #include <limits.h>
 
 #include <Python.h>
+#include <structmember.h>
+
 #include <FLAC/stream_decoder.h>
 
 /****************************************************************/
@@ -534,6 +536,19 @@ static PyMethodDef Decoder_methods[] = {
     {NULL, NULL}
 };
 
+static PyMemberDef Decoder_members[] = {
+    {"channels", T_UINT,
+     offsetof(DecoderObject, out_attr.channels),
+     READONLY},
+    {"bits_per_sample", T_UINT,
+     offsetof(DecoderObject, out_attr.bits_per_sample),
+     READONLY},
+    {"sample_rate", T_ULONG,
+     offsetof(DecoderObject, out_attr.sample_rate),
+     READONLY},
+    {NULL}
+};
+
 static PyTypeObject Decoder_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "plibflac._io.Decoder",     /*tp_name*/
@@ -564,7 +579,7 @@ static PyTypeObject Decoder_Type = {
     0,                          /*tp_iter*/
     0,                          /*tp_iternext*/
     Decoder_methods,            /*tp_methods*/
-    0,                          /*tp_members*/
+    Decoder_members,            /*tp_members*/
     0,                          /*tp_getset*/
     0,                          /*tp_base*/
     0,                          /*tp_dict*/
