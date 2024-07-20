@@ -355,6 +355,19 @@ newDecoderObject(PyObject *fileobj)
     return self;
 }
 
+static int
+Decoder_traverse(DecoderObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(self->fileobj);
+    return 0;
+}
+
+static void
+Decoder_clear(DecoderObject *self)
+{
+    Py_CLEAR(self->fileobj);
+}
+
 static void
 Decoder_dealloc(DecoderObject *self)
 {
@@ -570,10 +583,10 @@ static PyTypeObject Decoder_Type = {
     0,                          /*tp_getattro*/
     0,                          /*tp_setattro*/
     0,                          /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT,         /*tp_flags*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
     0,                          /*tp_doc*/
-    0,                          /*tp_traverse*/
-    0,                          /*tp_clear*/
+    (traverseproc)Decoder_traverse, /*tp_traverse*/
+    (inquiry)Decoder_clear,     /*tp_clear*/
     0,                          /*tp_richcompare*/
     0,                          /*tp_weaklistoffset*/
     0,                          /*tp_iter*/
