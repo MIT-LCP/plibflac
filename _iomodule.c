@@ -6,6 +6,7 @@
 #include <structmember.h>
 
 #include <FLAC/stream_decoder.h>
+#include <FLAC/stream_encoder.h>
 
 /****************************************************************/
 
@@ -591,10 +592,195 @@ io_open_decoder(PyObject *self, PyObject *args)
 }
 
 /****************************************************************/
+/* Encoder objects */
+
+typedef struct {
+    PyObject_HEAD
+    PyObject            *fileobj;
+    FLAC__StreamEncoder *encoder;
+    char                 seekable;
+} EncoderObject;
+
+static PyObject *Encoder_Type;
+
+static FLAC__StreamEncoderWriteStatus
+encoder_write(const FLAC__StreamEncoder *encoder,
+              const FLAC__byte           buffer[],
+              size_t                     bytes,
+              uint32_t                   samples,
+              uint32_t                   current_frame,
+              void                      *client_data)
+{
+    EncoderObject *self = client_data;
+    PyObject *memview, *count;
+    size_t n;
+
+    while (bytes > 0) {
+        memview = PyMemoryView_FromMemory((void *) buffer, bytes, PyBUF_READ);
+        count = PyObject_CallMethod(self->fileobj, "write", "(O)", memview);
+        n = count ? PyLong_AsSize_t(count) : (size_t) -1;
+        Py_XDECREF(memview);
+        Py_XDECREF(count);
+
+        if (PyErr_Occurred()) {
+            return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+        } else if (n > bytes) {
+            PyErr_SetString(PyExc_ValueError, "invalid result from write");
+            return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+        } else {
+            bytes -= n;
+        }
+    }
+    return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
+}
+
+static FLAC__StreamEncoderSeekStatus
+encoder_seek(const FLAC__StreamEncoder *encoder,
+             FLAC__uint64               absolute_byte_offset,
+             void                      *client_data)
+{
+    EncoderObject *self = client_data;
+    PyObject *dummy;
+
+    if (!self->seekable)
+        return FLAC__STREAM_ENCODER_SEEK_STATUS_UNSUPPORTED;
+
+    dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
+                                (unsigned long long) absolute_byte_offset);
+    Py_XDECREF(dummy);
+
+    if (PyErr_Occurred())
+        return FLAC__STREAM_ENCODER_SEEK_STATUS_ERROR;
+    else
+        return FLAC__STREAM_ENCODER_SEEK_STATUS_OK;
+}
+
+static FLAC__StreamEncoderTellStatus
+encoder_tell(const FLAC__StreamEncoder *encoder,
+             FLAC__uint64              *absolute_byte_offset,
+             void                      *client_data)
+{
+    EncoderObject *self = client_data;
+    PyObject *result;
+    FLAC__uint64 pos;
+
+    if (!self->seekable)
+        return FLAC__STREAM_ENCODER_TELL_STATUS_UNSUPPORTED;
+
+    result = PyObject_CallMethod(self->fileobj, "tell", "()");
+    pos = result ? Long_AsUint64(result) : (FLAC__uint64) -1;
+    Py_XDECREF(result);
+
+    if (PyErr_Occurred()) {
+        return FLAC__STREAM_ENCODER_TELL_STATUS_ERROR;
+    } else {
+        *absolute_byte_offset = pos;
+        return FLAC__STREAM_ENCODER_TELL_STATUS_OK;
+    }
+}
+
+static EncoderObject *
+newEncoderObject(PyObject *fileobj)
+{
+    EncoderObject *self;
+    FLAC__StreamEncoderInitStatus status;
+    PyObject *seekable;
+
+    self = PyObject_GC_New(EncoderObject, (PyTypeObject *) Encoder_Type);
+    if (self == NULL)
+        return NULL;
+
+    self->encoder = FLAC__stream_encoder_new();
+    self->fileobj = fileobj;
+    Py_XINCREF(self->fileobj);
+
+    seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
+    self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
+    Py_XDECREF(seekable);
+    if (PyErr_Occurred()) {
+        Py_XDECREF(self);
+        return NULL;
+    }
+
+    if (self->encoder == NULL) {
+        PyErr_NoMemory();
+        Py_XDECREF(self);
+        return NULL;
+    }
+
+    status = FLAC__stream_encoder_init_stream(self->encoder,
+                                              &encoder_write,
+                                              &encoder_seek,
+                                              &encoder_tell,
+                                              NULL, self);
+
+    if (status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
+        PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
+                     FLAC__StreamEncoderInitStatusString[status]);
+        Py_XDECREF(self);
+        return NULL;
+    }
+
+    return self;
+}
+
+static int
+Encoder_traverse(EncoderObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(self->fileobj);
+    return 0;
+}
+
+static void
+Encoder_clear(EncoderObject *self)
+{
+    Py_CLEAR(self->fileobj);
+}
+
+static void
+Encoder_dealloc(EncoderObject *self)
+{
+    Py_CLEAR(self->fileobj);
+
+    if (self->encoder)
+        FLAC__stream_encoder_delete(self->encoder);
+
+    PyObject_Free(self);
+}
+
+static PyType_Slot Encoder_Type_slots[] = {
+    {Py_tp_dealloc,  Encoder_dealloc},
+    {Py_tp_traverse, Encoder_traverse},
+    {Py_tp_clear,    Encoder_clear},
+    {0, 0}
+};
+
+static PyType_Spec Encoder_Type_spec = {
+    "plibflac._io.Encoder",
+    sizeof(EncoderObject),
+    0,
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    Encoder_Type_slots
+};
+
+static PyObject *
+io_open_encoder(PyObject *self, PyObject *args)
+{
+    PyObject *fileobj = NULL;
+
+    if (!PyArg_ParseTuple(args, "O:open_encoder", &fileobj))
+        return NULL;
+
+    return (PyObject *) newEncoderObject(fileobj);
+}
+
+/****************************************************************/
 
 static PyMethodDef io_methods[] = {
     {"open_decoder", io_open_decoder, METH_VARARGS,
      PyDoc_STR("open_decoder(fileobj) -> new Decoder object")},
+    {"open_encoder", io_open_encoder, METH_VARARGS,
+     PyDoc_STR("open_encoder(fileobj) -> new Encoder object")},
     {NULL, NULL}
 };
 
@@ -607,6 +793,12 @@ io_exec(PyObject *m)
     if (Decoder_Type == NULL) {
         Decoder_Type = PyType_FromSpec(&Decoder_Type_spec);
         if (Decoder_Type == NULL)
+            return -1;
+    }
+
+    if (Encoder_Type == NULL) {
+        Encoder_Type = PyType_FromSpec(&Encoder_Type_spec);
+        if (Encoder_Type == NULL)
             return -1;
     }
 
