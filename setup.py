@@ -3,11 +3,13 @@
 from setuptools import Extension, setup
 
 setup(
+    name="plibflac",
+    packages=["plibflac"],
     ext_modules=[
         Extension(
             name="plibflac._io",
-            sources=["src/_iomodule.c"],
+            sources=["_iomodule.c"],
             libraries=["FLAC"],
         ),
-    ]
+    ],
 )
