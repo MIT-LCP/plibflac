@@ -812,13 +812,12 @@ plibflac_exec(PyObject *m)
 
     if (ErrorObject == NULL) {
         ErrorObject = PyErr_NewException("plibflac.error", NULL, NULL);
-        if (ErrorObject == NULL) {
+        if (ErrorObject == NULL)
             return -1;
-        }
     }
-    int rc = PyModule_AddType(m, (PyTypeObject *)ErrorObject);
-    Py_DECREF(ErrorObject);
-    if (rc < 0) {
+    Py_INCREF(ErrorObject);
+    if (PyModule_AddObject(m, "error", ErrorObject) < 0) {
+        Py_DECREF(ErrorObject);
         return -1;
     }
 
