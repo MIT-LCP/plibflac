@@ -585,7 +585,7 @@ static PyType_Spec Decoder_Type_spec = {
 };
 
 static PyObject *
-io_open_decoder(PyObject *self, PyObject *args)
+plibflac_open_decoder(PyObject *self, PyObject *args)
 {
     PyObject *fileobj = NULL;
 
@@ -772,7 +772,7 @@ static PyType_Spec Encoder_Type_spec = {
 };
 
 static PyObject *
-io_open_encoder(PyObject *self, PyObject *args)
+plibflac_open_encoder(PyObject *self, PyObject *args)
 {
     PyObject *fileobj = NULL;
 
@@ -784,10 +784,10 @@ io_open_encoder(PyObject *self, PyObject *args)
 
 /****************************************************************/
 
-static PyMethodDef io_methods[] = {
-    {"open_decoder", io_open_decoder, METH_VARARGS,
+static PyMethodDef plibflac_methods[] = {
+    {"open_decoder", plibflac_open_decoder, METH_VARARGS,
      PyDoc_STR("open_decoder(fileobj) -> new Decoder object")},
-    {"open_encoder", io_open_encoder, METH_VARARGS,
+    {"open_encoder", plibflac_open_encoder, METH_VARARGS,
      PyDoc_STR("open_encoder(fileobj) -> new Encoder object")},
     {NULL, NULL}
 };
@@ -796,7 +796,7 @@ PyDoc_STRVAR(module_doc,
 "Low-level functions for reading and writing FLAC streams.");
 
 static int
-io_exec(PyObject *m)
+plibflac_exec(PyObject *m)
 {
     if (Decoder_Type == NULL) {
         Decoder_Type = PyType_FromSpec(&Decoder_Type_spec);
@@ -825,25 +825,25 @@ io_exec(PyObject *m)
     return 0;
 }
 
-static struct PyModuleDef_Slot io_slots[] = {
-    {Py_mod_exec, io_exec},
+static struct PyModuleDef_Slot plibflac_slots[] = {
+    {Py_mod_exec, plibflac_exec},
     {0, NULL},
 };
 
-static struct PyModuleDef iomodule = {
+static struct PyModuleDef plibflacmodule = {
     PyModuleDef_HEAD_INIT,
     "_io",
     module_doc,
     0,
-    io_methods,
-    io_slots,
+    plibflac_methods,
+    plibflac_slots,
     NULL,
     NULL,
     NULL
 };
 
 PyMODINIT_FUNC
-PyInit__io(void)
+PyInit__plibflac(void)
 {
-    return PyModuleDef_Init(&iomodule);
+    return PyModuleDef_Init(&plibflacmodule);
 }

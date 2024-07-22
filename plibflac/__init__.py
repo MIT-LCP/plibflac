@@ -2,7 +2,7 @@
 Functions for reading and writing FLAC streams.
 """
 
-from plibflac._io import (
+from _plibflac import (
     error,
     open_decoder,
 )

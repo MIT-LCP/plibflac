@@ -7,8 +7,8 @@ setup(
     packages=["plibflac"],
     ext_modules=[
         Extension(
-            name="plibflac._io",
-            sources=["_iomodule.c"],
+            name="_plibflac",
+            sources=["_plibflacmodule.c"],
             libraries=["FLAC"],
         ),
     ],
