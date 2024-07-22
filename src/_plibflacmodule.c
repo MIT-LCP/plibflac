@@ -43,10 +43,44 @@ Long_AsUint64(PyObject *n)
 }
 
 /****************************************************************/
+
+/* Simple check to prevent calling decoder/encoder methods from within
+   I/O callbacks.
+
+   FIXME: Replace this with something actually thread-safe. */
+
+#define BEGIN_NO_RECURSION(method_name)                                 \
+    do {                                                                \
+        if (recursion_check(&self->busy_method, method_name) == 0) {    \
+
+#define END_NO_RECURSION                                                \
+        done:                                                           \
+            self->busy_method = NULL;                                   \
+        }                                                               \
+    } while (0)
+
+static int
+recursion_check(const char **busy_method, const char *this_method)
+{
+    if (*busy_method) {
+        PyErr_Format(PyExc_TypeError,
+                     "%s() called recursively within %s()",
+                     this_method, *busy_method);
+        return -1;
+    } else {
+        *busy_method = this_method;
+        return 0;
+    }
+}
+
+/****************************************************************/
 /* Decoder objects */
 
 typedef struct {
     PyObject_HEAD
+
+    const char          *busy_method;
+
     PyObject            *fileobj;
     FLAC__StreamDecoder *decoder;
     char                 seekable;
@@ -345,6 +379,7 @@ newDecoderObject(PyObject *fileobj)
     if (self == NULL)
         return NULL;
 
+    self->busy_method = NULL;
     self->decoder = FLAC__stream_decoder_new();
     self->eof = 0;
     self->fileobj = fileobj;
@@ -401,15 +436,17 @@ Decoder_open(DecoderObject *self, PyObject *args)
 {
     FLAC__StreamDecoderInitStatus status;
     PyObject *seekable;
+    PyObject *result = NULL;
 
+    BEGIN_NO_RECURSION("open");
     if (!PyArg_ParseTuple(args, ":open"))
-        return NULL;
+        goto done;
 
     seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
     self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
     Py_XDECREF(seekable);
     if (PyErr_Occurred())
-        return NULL;
+        goto done;
 
     status = FLAC__stream_decoder_init_stream(self->decoder,
                                               &decoder_read,
@@ -425,22 +462,26 @@ Decoder_open(DecoderObject *self, PyObject *args)
     if (status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
         PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
                      FLAC__StreamDecoderInitStatusString[status]);
-        return NULL;
+        goto done;
     }
 
     decoder_clear_internal(self);
 
-    Py_INCREF(Py_None);
-    return Py_None;
+    Py_INCREF((result = Py_None));
+
+    END_NO_RECURSION;
+    return result;
 }
 
 static PyObject *
 Decoder_close(DecoderObject *self, PyObject *args)
 {
     FLAC__bool ok;
+    PyObject *result = NULL;
 
+    BEGIN_NO_RECURSION("close");
     if (!PyArg_ParseTuple(args, ":close"))
-        return NULL;
+        goto done;
 
     decoder_clear_internal(self);
 
@@ -448,11 +489,13 @@ Decoder_close(DecoderObject *self, PyObject *args)
 
     if (!ok) {
         PyErr_Format(ErrorObject, "finish failed (MD5 hash incorrect)");
-        return NULL;
+        goto done;
     }
 
-    Py_INCREF(Py_None);
-    return Py_None;
+    Py_INCREF((result = Py_None));
+
+    END_NO_RECURSION;
+    return result;
 }
 
 static PyObject *
@@ -465,8 +508,9 @@ Decoder_read(DecoderObject *self, PyObject *args)
     Py_ssize_t out_count, new_size;
     unsigned int i;
 
+    BEGIN_NO_RECURSION("read");
     if (!PyArg_ParseTuple(args, "n:read", &limit))
-        return NULL;
+        goto done;
 
     self->out_remaining = limit;
 
@@ -540,6 +584,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
     self->out_count = 0;
     self->out_remaining = 0;
 
+    END_NO_RECURSION;
     return result;
 }
 
@@ -548,9 +593,11 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
 {
     FLAC__bool ok;
     FLAC__StreamDecoderState state;
+    PyObject *result = NULL;
 
+    BEGIN_NO_RECURSION("read_metadata");
     if (!PyArg_ParseTuple(args, ":read_metadata"))
-        return NULL;
+        goto done;
 
     ok = FLAC__stream_decoder_process_until_end_of_metadata(self->decoder);
 
@@ -559,31 +606,34 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
         FLAC__stream_decoder_flush(self->decoder);
 
     if (PyErr_Occurred())
-        return NULL;
+        goto done;
 
     if (!ok) {
         PyErr_Format(ErrorObject, "read_metadata failed (state = %s)",
                      FLAC__StreamDecoderStateString[state]);
-        return NULL;
+        goto done;
     }
 
-    Py_INCREF(Py_None);
-    return Py_None;
+    Py_INCREF((result = Py_None));
+
+    END_NO_RECURSION;
+    return result;
 }
 
 static PyObject *
 Decoder_seek(DecoderObject *self, PyObject *args)
 {
-    PyObject *arg = NULL;
+    PyObject *arg = NULL, *result = NULL;
     FLAC__uint64 sample_number;
     FLAC__bool ok;
     FLAC__StreamDecoderState state;
 
+    BEGIN_NO_RECURSION("seek");
     if (!PyArg_ParseTuple(args, "O:seek", &arg))
-        return NULL;
+        goto done;
     sample_number = Long_AsUint64(arg);
     if (PyErr_Occurred())
-        return NULL;
+        goto done;
 
     self->buf_count = 0;
 
@@ -595,16 +645,18 @@ Decoder_seek(DecoderObject *self, PyObject *args)
         FLAC__stream_decoder_flush(self->decoder);
 
     if (PyErr_Occurred())
-        return NULL;
+        goto done;
 
     if (!ok) {
         PyErr_Format(ErrorObject, "seek_absolute failed (state = %s)",
                      FLAC__StreamDecoderStateString[state]);
-        return NULL;
+        goto done;
     }
 
-    Py_INCREF(Py_None);
-    return Py_None;
+    Py_INCREF((result = Py_None));
+
+    END_NO_RECURSION;
+    return result;
 }
 
 static PyObject*
