@@ -408,10 +408,8 @@ Decoder_open(DecoderObject *self, PyObject *args)
     seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
     self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
     Py_XDECREF(seekable);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(self);
+    if (PyErr_Occurred())
         return NULL;
-    }
 
     status = FLAC__stream_decoder_init_stream(self->decoder,
                                               &decoder_read,
@@ -427,7 +425,6 @@ Decoder_open(DecoderObject *self, PyObject *args)
     if (status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
         PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
                      FLAC__StreamDecoderInitStatusString[status]);
-        Py_XDECREF(self);
         return NULL;
     }
 
