@@ -841,7 +841,7 @@ static struct PyModuleDef_Slot plibflac_slots[] = {
 
 static struct PyModuleDef plibflacmodule = {
     PyModuleDef_HEAD_INIT,
-    "_io",
+    "_plibflac",
     module_doc,
     0,
     plibflac_methods,
