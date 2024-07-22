@@ -33,12 +33,14 @@ class TestDecoder(unittest.TestCase):
             self.assertEqual(decoder.channels, 0)
             self.assertEqual(decoder.sample_rate, 0)
             self.assertEqual(decoder.bits_per_sample, 0)
+            self.assertEqual(decoder.total_samples, 0)
 
             decoder.read_metadata()
 
             self.assertEqual(decoder.channels, 2)
             self.assertEqual(decoder.sample_rate, 96000)
             self.assertEqual(decoder.bits_per_sample, 16)
+            self.assertEqual(decoder.total_samples, 650000)
 
             decoder.close()
 

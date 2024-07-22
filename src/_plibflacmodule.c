@@ -610,6 +610,14 @@ Decoder_seek(DecoderObject *self, PyObject *args)
     return Py_None;
 }
 
+static PyObject*
+Decoder_total_samples_getter(DecoderObject* self, void *closure)
+{
+    FLAC__uint64 n;
+    n = FLAC__stream_decoder_get_total_samples(self->decoder);
+    return PyLong_FromUnsignedLongLong(n);
+}
+
 static PyMethodDef Decoder_methods[] = {
     {"close", (PyCFunction)Decoder_close, METH_VARARGS,
      PyDoc_STR("close() -> None")},
@@ -637,12 +645,20 @@ static PyMemberDef Decoder_members[] = {
     {NULL}
 };
 
+static PyGetSetDef Decoder_properties[] = {
+    {"total_samples",
+     (getter)Decoder_total_samples_getter, NULL,
+     PyDoc_STR("Total length of stream, in samples"), NULL},
+    {NULL}
+};
+
 static PyType_Slot Decoder_Type_slots[] = {
     {Py_tp_dealloc,  Decoder_dealloc},
     {Py_tp_traverse, Decoder_traverse},
     {Py_tp_clear,    Decoder_clear},
     {Py_tp_methods,  Decoder_methods},
     {Py_tp_members,  Decoder_members},
+    {Py_tp_getset,   Decoder_properties},
     {0, 0}
 };
 
