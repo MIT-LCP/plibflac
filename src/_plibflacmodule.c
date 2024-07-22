@@ -549,14 +549,14 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
 }
 
 static PyObject *
-Decoder_seek_absolute(DecoderObject *self, PyObject *args)
+Decoder_seek(DecoderObject *self, PyObject *args)
 {
     PyObject *arg = NULL;
     FLAC__uint64 sample_number;
     FLAC__bool ok;
     FLAC__StreamDecoderState state;
 
-    if (!PyArg_ParseTuple(args, "O:seek_absolute", &arg))
+    if (!PyArg_ParseTuple(args, "O:seek", &arg))
         return NULL;
     sample_number = Long_AsUint64(arg);
     if (PyErr_Occurred())
@@ -593,7 +593,7 @@ static PyMethodDef Decoder_methods[] = {
      PyDoc_STR("read(n_samples) -> tuple of arrays, or None")},
     {"read_metadata", (PyCFunction)Decoder_read_metadata, METH_VARARGS,
      PyDoc_STR("read_metadata() -> None")},
-    {"seek_absolute", (PyCFunction)Decoder_seek_absolute, METH_VARARGS,
+    {"seek", (PyCFunction)Decoder_seek, METH_VARARGS,
      PyDoc_STR("seek_absolute(sample_number) -> None")},
     {NULL, NULL}
 };
