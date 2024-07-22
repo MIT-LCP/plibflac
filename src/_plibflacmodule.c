@@ -293,6 +293,19 @@ decoder_metadata(const FLAC__StreamDecoder  *decoder,
                  const FLAC__StreamMetadata *metadata,
                  void                       *client_data)
 {
+    DecoderObject *self = client_data;
+
+    /* I'm not sure it's possible for metadata callback to be invoked
+       after decoding begins, but be safe */
+    if (self->out_count > 0 || self->buf_count > 0)
+        return;
+
+    if (metadata && metadata->type == FLAC__METADATA_TYPE_STREAMINFO) {
+        self->out_attr.channels = metadata->data.stream_info.channels;
+        self->out_attr.sample_rate = metadata->data.stream_info.sample_rate;
+        self->out_attr.bits_per_sample =
+            metadata->data.stream_info.bits_per_sample;
+    }
 }
 
 static void
