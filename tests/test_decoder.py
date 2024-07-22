@@ -17,8 +17,10 @@ class TestDecoder(unittest.TestCase):
         """
         with open(os.devnull, 'rb') as fileobj:
             decoder = plibflac.decoder(fileobj)
+            decoder.open()
             data = decoder.read(1000)
             self.assertIsNone(data)
+            decoder.close()
 
 
 if __name__ == '__main__':

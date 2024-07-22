@@ -306,8 +306,6 @@ static DecoderObject *
 newDecoderObject(PyObject *fileobj)
 {
     DecoderObject *self;
-    FLAC__StreamDecoderInitStatus status;
-    PyObject *seekable;
     unsigned int i;
 
     self = PyObject_GC_New(DecoderObject, (PyTypeObject *) Decoder_Type);
@@ -333,34 +331,8 @@ newDecoderObject(PyObject *fileobj)
     memset(&self->out_attr, 0, sizeof(self->out_attr));
     memset(&self->buf_attr, 0, sizeof(self->buf_attr));
 
-    seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
-    self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
-    Py_XDECREF(seekable);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(self);
-        return NULL;
-    }
-
     if (self->decoder == NULL) {
         PyErr_NoMemory();
-        Py_XDECREF(self);
-        return NULL;
-    }
-
-    status = FLAC__stream_decoder_init_stream(self->decoder,
-                                              &decoder_read,
-                                              &decoder_seek,
-                                              &decoder_tell,
-                                              &decoder_length,
-                                              &decoder_eof,
-                                              &decoder_write,
-                                              &decoder_metadata,
-                                              &decoder_error,
-                                              self);
-
-    if (status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
-        PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
-                     FLAC__StreamDecoderInitStatusString[status]);
         Py_XDECREF(self);
         return NULL;
     }
@@ -400,6 +372,64 @@ Decoder_dealloc(DecoderObject *self)
         FLAC__stream_decoder_delete(self->decoder);
 
     PyObject_GC_Del(self);
+}
+
+static PyObject *
+Decoder_open(DecoderObject *self, PyObject *args)
+{
+    FLAC__StreamDecoderInitStatus status;
+    PyObject *seekable;
+
+    if (!PyArg_ParseTuple(args, ":open"))
+        return NULL;
+
+    seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
+    self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
+    Py_XDECREF(seekable);
+    if (PyErr_Occurred()) {
+        Py_XDECREF(self);
+        return NULL;
+    }
+
+    status = FLAC__stream_decoder_init_stream(self->decoder,
+                                              &decoder_read,
+                                              &decoder_seek,
+                                              &decoder_tell,
+                                              &decoder_length,
+                                              &decoder_eof,
+                                              &decoder_write,
+                                              &decoder_metadata,
+                                              &decoder_error,
+                                              self);
+
+    if (status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
+        PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
+                     FLAC__StreamDecoderInitStatusString[status]);
+        Py_XDECREF(self);
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+static PyObject *
+Decoder_close(DecoderObject *self, PyObject *args)
+{
+    FLAC__bool ok;
+
+    if (!PyArg_ParseTuple(args, ":close"))
+        return NULL;
+
+    ok = FLAC__stream_decoder_finish(self->decoder);
+
+    if (!ok) {
+        PyErr_Format(ErrorObject, "finish failed (MD5 hash incorrect)");
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
 static PyObject *
@@ -555,6 +585,10 @@ Decoder_seek_absolute(DecoderObject *self, PyObject *args)
 }
 
 static PyMethodDef Decoder_methods[] = {
+    {"close", (PyCFunction)Decoder_close, METH_VARARGS,
+     PyDoc_STR("close() -> None")},
+    {"open", (PyCFunction)Decoder_open, METH_VARARGS,
+     PyDoc_STR("open() -> None")},
     {"read", (PyCFunction)Decoder_read, METH_VARARGS,
      PyDoc_STR("read(n_samples) -> tuple of arrays, or None")},
     {"read_metadata", (PyCFunction)Decoder_read_metadata, METH_VARARGS,
