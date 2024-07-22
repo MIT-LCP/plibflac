@@ -884,6 +884,11 @@ PyDoc_STRVAR(module_doc,
 static int
 plibflac_exec(PyObject *m)
 {
+#ifdef PLIBFLAC_VERSION
+    if (PyModule_AddStringConstant(m, "__version__", PLIBFLAC_VERSION) < 0)
+        return -1;
+#endif
+
     if (Decoder_Type == NULL) {
         Decoder_Type = PyType_FromSpec(&Decoder_Type_spec);
         if (Decoder_Type == NULL)

@@ -10,17 +10,17 @@ from setuptools import Extension, setup
 
 with open('pyproject.toml') as f:
     _version = re.search('^version *= *"(.*?)"', f.read(), re.M)[1]
+_define_macros = [('PLIBFLAC_VERSION', '"%s"' % _version)]
 
 ################################################################
 
 _stable_abi = (3, 5)
 if (platform.python_implementation() == 'CPython'
         and sys.version_info >= _stable_abi):
-    _define_macros = [('Py_LIMITED_API', '0x%02x%02x0000' % _stable_abi)]
+    _define_macros += [('Py_LIMITED_API', '0x%02x%02x0000' % _stable_abi)]
     _py_limited_api = True
     _bdist_wheel_options = {'py_limited_api': 'cp%d%d' % _stable_abi}
 else:
-    _define_macros = []
     _py_limited_api = False
     _bdist_wheel_options = {}
 
