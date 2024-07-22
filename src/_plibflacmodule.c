@@ -399,7 +399,7 @@ Decoder_dealloc(DecoderObject *self)
     if (self->decoder)
         FLAC__stream_decoder_delete(self->decoder);
 
-    PyObject_Free(self);
+    PyObject_GC_Del(self);
 }
 
 static PyObject *
@@ -763,7 +763,7 @@ Encoder_dealloc(EncoderObject *self)
     if (self->encoder)
         FLAC__stream_encoder_delete(self->encoder);
 
-    PyObject_Free(self);
+    PyObject_GC_Del(self);
 }
 
 static PyType_Slot Encoder_Type_slots[] = {
