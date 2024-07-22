@@ -190,14 +190,14 @@ write_out_samples(DecoderObject  *self,
         size = self->out_remaining * sizeof(FLAC__int32);
         for (i = 0; i < channels; i++) {
             Py_CLEAR(self->out_byteobjs[i]);
-            self->out_byteobjs[i] = PyBytes_FromStringAndSize(NULL, size);
+            self->out_byteobjs[i] = PyByteArray_FromStringAndSize(NULL, size);
             if (self->out_byteobjs[i] == NULL)
                 return -1;
         }
     }
 
     for (i = 0; i < channels; i++) {
-        p = (FLAC__int32 *) PyBytes_AsString(self->out_byteobjs[i]);
+        p = (FLAC__int32 *) PyByteArray_AsString(self->out_byteobjs[i]);
         if (p == NULL)
             return -1;
         memcpy(&p[self->out_count],
@@ -448,7 +448,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
         if (self->out_remaining > 0) {
             new_size = self->out_count * sizeof(FLAC__int32);
             for (i = 0; i < self->out_attr.channels; i++)
-                if (_PyBytes_Resize(&self->out_byteobjs[i], new_size) < 0)
+                if (PyByteArray_Resize(self->out_byteobjs[i], new_size) < 0)
                     goto fail;
         }
 
