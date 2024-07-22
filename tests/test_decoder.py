@@ -22,6 +22,29 @@ class TestDecoder(unittest.TestCase):
             self.assertIsNone(data)
             decoder.close()
 
+    def test_read_metadata(self):
+        """
+        Test reading metadata from a FLAC file.
+        """
+        with open(self.data_path('100s.flac'), 'rb') as fileobj:
+            decoder = plibflac.decoder(fileobj)
+            decoder.open()
+
+            self.assertEqual(decoder.channels, 0)
+            self.assertEqual(decoder.sample_rate, 0)
+            self.assertEqual(decoder.bits_per_sample, 0)
+
+            decoder.read_metadata()
+
+            self.assertEqual(decoder.channels, 2)
+            self.assertEqual(decoder.sample_rate, 96000)
+            self.assertEqual(decoder.bits_per_sample, 16)
+
+            decoder.close()
+
+    def data_path(self, name):
+        return os.path.join(os.path.dirname(__file__), 'data', name)
+
 
 if __name__ == '__main__':
     unittest.main()
