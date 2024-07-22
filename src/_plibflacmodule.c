@@ -302,6 +302,26 @@ decoder_error(const FLAC__StreamDecoder      *decoder,
 {
 }
 
+static void
+decoder_clear_internal(DecoderObject *self)
+{
+    unsigned int i;
+
+    for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
+        Py_CLEAR(self->out_byteobjs[i]);
+        PyMem_Free(self->buf_samples[i]);
+        self->buf_samples[i] = NULL;
+    }
+
+    self->out_count = 0;
+    self->out_remaining = 0;
+    self->buf_start = 0;
+    self->buf_count = 0;
+    self->buf_size = 0;
+    memset(&self->out_attr, 0, sizeof(self->out_attr));
+    memset(&self->buf_attr, 0, sizeof(self->buf_attr));
+}
+
 static DecoderObject *
 newDecoderObject(PyObject *fileobj)
 {
@@ -323,19 +343,14 @@ newDecoderObject(PyObject *fileobj)
         self->out_byteobjs[i] = NULL;
         self->buf_samples[i] = NULL;
     }
-    self->out_count = 0;
-    self->out_remaining = 0;
-    self->buf_start = 0;
-    self->buf_count = 0;
-    self->buf_size = 0;
-    memset(&self->out_attr, 0, sizeof(self->out_attr));
-    memset(&self->buf_attr, 0, sizeof(self->buf_attr));
 
     if (self->decoder == NULL) {
         PyErr_NoMemory();
         Py_XDECREF(self);
         return NULL;
     }
+
+    decoder_clear_internal(self);
 
     return self;
 }
@@ -356,15 +371,9 @@ Decoder_clear(DecoderObject *self)
 static void
 Decoder_dealloc(DecoderObject *self)
 {
-    unsigned int i;
-
     PyObject_GC_UnTrack((PyObject *) self);
 
-    for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
-        Py_CLEAR(self->out_byteobjs[i]);
-        PyMem_Free(self->buf_samples[i]);
-        self->buf_samples[i] = NULL;
-    }
+    decoder_clear_internal(self);
 
     Py_CLEAR(self->fileobj);
 
@@ -409,6 +418,8 @@ Decoder_open(DecoderObject *self, PyObject *args)
         return NULL;
     }
 
+    decoder_clear_internal(self);
+
     Py_INCREF(Py_None);
     return Py_None;
 }
@@ -420,6 +431,8 @@ Decoder_close(DecoderObject *self, PyObject *args)
 
     if (!PyArg_ParseTuple(args, ":close"))
         return NULL;
+
+    decoder_clear_internal(self);
 
     ok = FLAC__stream_decoder_finish(self->decoder);
 
