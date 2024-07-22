@@ -595,11 +595,11 @@ static PyType_Spec Decoder_Type_spec = {
 };
 
 static PyObject *
-plibflac_open_decoder(PyObject *self, PyObject *args)
+plibflac_decoder(PyObject *self, PyObject *args)
 {
     PyObject *fileobj = NULL;
 
-    if (!PyArg_ParseTuple(args, "O:open_decoder", &fileobj))
+    if (!PyArg_ParseTuple(args, "O:decoder", &fileobj))
         return NULL;
 
     return (PyObject *) newDecoderObject(fileobj);
@@ -782,11 +782,11 @@ static PyType_Spec Encoder_Type_spec = {
 };
 
 static PyObject *
-plibflac_open_encoder(PyObject *self, PyObject *args)
+plibflac_encoder(PyObject *self, PyObject *args)
 {
     PyObject *fileobj = NULL;
 
-    if (!PyArg_ParseTuple(args, "O:open_encoder", &fileobj))
+    if (!PyArg_ParseTuple(args, "O:encoder", &fileobj))
         return NULL;
 
     return (PyObject *) newEncoderObject(fileobj);
@@ -795,10 +795,10 @@ plibflac_open_encoder(PyObject *self, PyObject *args)
 /****************************************************************/
 
 static PyMethodDef plibflac_methods[] = {
-    {"open_decoder", plibflac_open_decoder, METH_VARARGS,
-     PyDoc_STR("open_decoder(fileobj) -> new Decoder object")},
-    {"open_encoder", plibflac_open_encoder, METH_VARARGS,
-     PyDoc_STR("open_encoder(fileobj) -> new Encoder object")},
+    {"decoder", plibflac_decoder, METH_VARARGS,
+     PyDoc_STR("decoder(fileobj) -> new Decoder object")},
+    {"encoder", plibflac_encoder, METH_VARARGS,
+     PyDoc_STR("encoder(fileobj) -> new Encoder object")},
     {NULL, NULL}
 };
 
