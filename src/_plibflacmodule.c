@@ -735,6 +735,9 @@ plibflac_decoder(PyObject *self, PyObject *args)
 
 typedef struct {
     PyObject_HEAD
+
+    const char          *busy_method;
+
     PyObject            *fileobj;
     FLAC__StreamEncoder *encoder;
     char                 seekable;
@@ -822,42 +825,20 @@ static EncoderObject *
 newEncoderObject(PyObject *fileobj)
 {
     EncoderObject *self;
-    FLAC__StreamEncoderInitStatus status;
-    PyObject *seekable;
 
     self = PyObject_GC_New(EncoderObject, (PyTypeObject *) Encoder_Type);
     if (self == NULL)
         return NULL;
 
+    self->busy_method = NULL;
     self->encoder = FLAC__stream_encoder_new();
     self->fileobj = fileobj;
     Py_XINCREF(self->fileobj);
 
     PyObject_GC_Track((PyObject *) self);
 
-    seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
-    self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
-    Py_XDECREF(seekable);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(self);
-        return NULL;
-    }
-
     if (self->encoder == NULL) {
         PyErr_NoMemory();
-        Py_XDECREF(self);
-        return NULL;
-    }
-
-    status = FLAC__stream_encoder_init_stream(self->encoder,
-                                              &encoder_write,
-                                              &encoder_seek,
-                                              &encoder_tell,
-                                              NULL, self);
-
-    if (status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
-        PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
-                     FLAC__StreamEncoderInitStatusString[status]);
         Py_XDECREF(self);
         return NULL;
     }
@@ -891,10 +872,79 @@ Encoder_dealloc(EncoderObject *self)
     PyObject_GC_Del(self);
 }
 
+static PyObject *
+Encoder_open(EncoderObject *self, PyObject *args)
+{
+    FLAC__StreamEncoderInitStatus status;
+    PyObject *seekable, *result = NULL;
+
+    BEGIN_NO_RECURSION("open");
+    if (!PyArg_ParseTuple(args, ":open"))
+        goto done;
+
+    seekable = PyObject_CallMethod(self->fileobj, "seekable", "()");
+    self->seekable = seekable ? PyObject_IsTrue(seekable) : 0;
+    Py_XDECREF(seekable);
+    if (PyErr_Occurred())
+        goto done;
+
+    status = FLAC__stream_encoder_init_stream(self->encoder,
+                                              &encoder_write,
+                                              &encoder_seek,
+                                              &encoder_tell,
+                                              NULL, self);
+
+    if (status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
+        PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
+                     FLAC__StreamEncoderInitStatusString[status]);
+        goto done;
+    }
+
+    Py_INCREF((result = Py_None));
+
+    END_NO_RECURSION;
+    return result;
+}
+
+static PyObject *
+Encoder_close(EncoderObject *self, PyObject *args)
+{
+    PyObject *result = NULL;
+    FLAC__StreamEncoderState state;
+    FLAC__bool ok;
+
+    BEGIN_NO_RECURSION("close");
+    if (!PyArg_ParseTuple(args, ":close"))
+        goto done;
+
+    ok = FLAC__stream_encoder_finish(self->encoder);
+
+    if (!ok) {
+        state = FLAC__stream_encoder_get_state(self->encoder);
+        PyErr_Format(ErrorObject, "finish failed (state = %s)",
+                     FLAC__StreamEncoderStateString[state]);
+        goto done;
+    }
+
+    Py_INCREF((result = Py_None));
+
+    END_NO_RECURSION;
+    return result;
+}
+
+static PyMethodDef Encoder_methods[] = {
+    {"close", (PyCFunction)Encoder_close, METH_VARARGS,
+     PyDoc_STR("close() -> None")},
+    {"open", (PyCFunction)Encoder_open, METH_VARARGS,
+     PyDoc_STR("open() -> None")},
+    {NULL}
+};
+
 static PyType_Slot Encoder_Type_slots[] = {
     {Py_tp_dealloc,  Encoder_dealloc},
     {Py_tp_traverse, Encoder_traverse},
     {Py_tp_clear,    Encoder_clear},
+    {Py_tp_methods,  Encoder_methods},
     {0, 0}
 };
 
