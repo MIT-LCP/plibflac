@@ -114,6 +114,10 @@ decoder_read(const FLAC__StreamDecoder *decoder,
     size_t max = *bytes, n;
     PyObject *memview, *count;
 
+    PyErr_CheckSignals();
+    if (PyErr_Occurred())
+        return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
+
     memview = PyMemoryView_FromMemory((void *) buffer, max, PyBUF_WRITE);
     count = PyObject_CallMethod(self->fileobj, "readinto", "(O)", memview);
     *bytes = n = count ? PyLong_AsSize_t(count) : (size_t) -1;
@@ -758,6 +762,10 @@ encoder_write(const FLAC__StreamEncoder *encoder,
     size_t n;
 
     while (bytes > 0) {
+        PyErr_CheckSignals();
+        if (PyErr_Occurred())
+            return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+
         memview = PyMemoryView_FromMemory((void *) buffer, bytes, PyBUF_READ);
         count = PyObject_CallMethod(self->fileobj, "write", "(O)", memview);
         n = count ? PyLong_AsSize_t(count) : (size_t) -1;
