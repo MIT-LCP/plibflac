@@ -758,7 +758,7 @@ encoder_write(const FLAC__StreamEncoder *encoder,
               void                      *client_data)
 {
     EncoderObject *self = client_data;
-    PyObject *memview, *count;
+    PyObject *bytesobj, *count;
     size_t n;
 
     while (bytes > 0) {
@@ -766,10 +766,10 @@ encoder_write(const FLAC__StreamEncoder *encoder,
         if (PyErr_Occurred())
             return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
 
-        memview = PyMemoryView_FromMemory((void *) buffer, bytes, PyBUF_READ);
-        count = PyObject_CallMethod(self->fileobj, "write", "(O)", memview);
+        bytesobj = PyBytes_FromStringAndSize((void *) buffer, bytes);
+        count = PyObject_CallMethod(self->fileobj, "write", "(O)", bytesobj);
         n = count ? PyLong_AsSize_t(count) : (size_t) -1;
-        Py_XDECREF(memview);
+        Py_XDECREF(bytesobj);
         Py_XDECREF(count);
 
         if (PyErr_Occurred()) {
