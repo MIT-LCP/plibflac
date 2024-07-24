@@ -932,11 +932,102 @@ Encoder_close(EncoderObject *self, PyObject *args)
     return result;
 }
 
+static PyObject *
+Encoder_write(EncoderObject *self, PyObject *args)
+{
+    PyObject *seq, *arrays[FLAC__MAX_CHANNELS] = {NULL},
+        *memview, *memview2, *result = NULL;
+    FLAC__int32 *data[FLAC__MAX_CHANNELS] = {NULL};
+    Py_ssize_t channels, i;
+    Py_ssize_t nsamples = 0, nsamples_i;
+    FLAC__StreamEncoderState state;
+    FLAC__bool ok;
+
+    BEGIN_NO_RECURSION("write");
+    if (!PyArg_ParseTuple(args, "O:write", &seq))
+        goto done;
+
+    channels = PySequence_Length(seq);
+    if (PyErr_Occurred())
+        goto done;
+
+    if (channels != FLAC__stream_encoder_get_channels(self->encoder)) {
+        PyErr_SetString(PyExc_TypeError, "length of sequence "
+                        "must match number of channels");
+        goto done;
+    }
+
+    for (i = 0; i < channels; i++) {
+        arrays[i] = PySequence_GetItem(seq, i);
+        if (!arrays[i])
+            goto done;
+        nsamples_i = PySequence_Length(arrays[i]);
+        if (PyErr_Occurred())
+            goto done;
+
+        if (i == 0) {
+            nsamples = nsamples_i;
+        } else if (nsamples_i != nsamples) {
+            PyErr_Format(PyExc_ValueError, "length of channel %u (%zu) "
+                         "must match length of channel 0 (%zu)",
+                         i, nsamples_i, nsamples);
+            goto done;
+        }
+    }
+
+    for (i = 0; i < channels; i++) {
+        data[i] = PyMem_New(FLAC__int32, nsamples);
+        if (!data[i]) {
+            PyErr_NoMemory();
+            goto done;
+        }
+
+        memview = PyMemoryView_FromMemory((void *) data[i],
+                                          nsamples * sizeof(FLAC__int32),
+                                          PyBUF_WRITE);
+        memview2 = PyObject_CallMethod(memview, "cast", "(s)", INT32_FORMAT);
+        Py_XDECREF(memview);
+        if (PySequence_SetSlice(memview2, 0, nsamples, arrays[i]) < 0) {
+            Py_XDECREF(memview2);
+            goto done;
+        }
+        Py_XDECREF(memview2);
+        Py_CLEAR(arrays[i]);
+    }
+
+    ok = FLAC__stream_encoder_process(self->encoder,
+                                      (const FLAC__int32 **) data,
+                                      nsamples);
+
+    if (PyErr_Occurred())
+        goto done;
+
+    if (!ok) {
+        state = FLAC__stream_encoder_get_state(self->encoder);
+        PyErr_Format(ErrorObject, "process failed (state = %s)",
+                     FLAC__StreamEncoderStateString[state]);
+        goto done;
+    }
+
+    Py_INCREF((result = Py_None));
+
+    END_NO_RECURSION;
+
+    for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
+        PyMem_Free(data[i]);
+        Py_CLEAR(arrays[i]);
+    }
+
+    return result;
+}
+
 static PyMethodDef Encoder_methods[] = {
     {"close", (PyCFunction)Encoder_close, METH_VARARGS,
      PyDoc_STR("close() -> None")},
     {"open", (PyCFunction)Encoder_open, METH_VARARGS,
      PyDoc_STR("open() -> None")},
+    {"write", (PyCFunction)Encoder_write, METH_VARARGS,
+     PyDoc_STR("write(sample_arrays) -> None")},
     {NULL}
 };
 
