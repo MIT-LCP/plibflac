@@ -66,6 +66,36 @@ Long_AsUint64(PyObject *n)
     return v;
 }
 
+static uintmax_t
+check_return_uint(PyObject *value, const char *method_name,
+                  const char *caller, uintmax_t max_value)
+{
+    uintmax_t n;
+
+    if (!value)
+        return 0;
+
+    if (!PyLong_Check(value)) {
+        PyErr_Format(PyExc_TypeError,
+                     "%s() returned %R, not an integer (in %s)",
+                     method_name, value, caller);
+        return 0;
+    }
+
+    if ((unsigned long long) -1 > (size_t) -1)
+        n = PyLong_AsUnsignedLongLong(value);
+    else
+        n = PyLong_AsSize_t(value);
+
+    if (PyErr_Occurred() || n > max_value) {
+        PyErr_Format(PyExc_TypeError,
+                     "%s() returned %R, which is out of range (in %s)",
+                     method_name, value, caller);
+        return 0;
+    }
+    return n;
+}
+
 /****************************************************************/
 
 /* Simple check to prevent calling decoder/encoder methods from within
@@ -135,16 +165,17 @@ decoder_read(const FLAC__StreamDecoder *decoder,
              void                      *client_data)
 {
     DecoderObject *self = client_data;
-    size_t max = *bytes, n;
-    PyObject *memview, *count;
+    size_t max = *bytes, n = 0;
+    PyObject *memview = NULL, *count = NULL;
 
     PyErr_CheckSignals();
     if (PyErr_Occurred())
         return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
 
     memview = PyMemoryView_FromMemory((void *) buffer, max, PyBUF_WRITE);
-    count = PyObject_CallMethod(self->fileobj, "readinto", "(O)", memview);
-    *bytes = n = count ? PyLong_AsSize_t(count) : (size_t) -1;
+    if (memview != NULL)
+        count = PyObject_CallMethod(self->fileobj, "readinto", "(O)", memview);
+    n = check_return_uint(count, "readinto", "decoder_read", max);
     Py_XDECREF(memview);
     Py_XDECREF(count);
 
@@ -154,9 +185,6 @@ decoder_read(const FLAC__StreamDecoder *decoder,
         *bytes = 0;
         self->eof = 1;
         return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
-    } else if (n > max) {
-        PyErr_SetString(PyExc_ValueError, "invalid result from readinto");
-        return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
     } else {
         *bytes = n;
         return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
@@ -177,6 +205,7 @@ decoder_seek(const FLAC__StreamDecoder *decoder,
     self->eof = 0;
     dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
                                 (unsigned long long) absolute_byte_offset);
+    check_return_uint(dummy, "seek", "decoder_seek", (FLAC__uint64) -1);
     Py_XDECREF(dummy);
 
     if (PyErr_Occurred())
@@ -198,7 +227,8 @@ decoder_tell(const FLAC__StreamDecoder *decoder,
         return FLAC__STREAM_DECODER_TELL_STATUS_UNSUPPORTED;
 
     result = PyObject_CallMethod(self->fileobj, "tell", "()");
-    pos = result ? Long_AsUint64(result) : (FLAC__uint64) -1;
+    pos = check_return_uint(result, "tell", "decoder_tell",
+                            (FLAC__uint64) -1);
     Py_XDECREF(result);
 
     if (PyErr_Occurred()) {
@@ -222,10 +252,16 @@ decoder_length(const FLAC__StreamDecoder *decoder,
         return FLAC__STREAM_DECODER_LENGTH_STATUS_UNSUPPORTED;
 
     oldpos = PyObject_CallMethod(self->fileobj, "tell", "()");
+    check_return_uint(oldpos, "tell", "decoder_length", (FLAC__uint64) -1);
+
     if (oldpos != NULL)
         newpos = PyObject_CallMethod(self->fileobj, "seek", "(ii)", 0, 2);
+    check_return_uint(newpos, "seek", "decoder_length", (FLAC__uint64) -1);
+
     if (newpos != NULL)
         dummy = PyObject_CallMethod(self->fileobj, "seek", "(O)", oldpos);
+    check_return_uint(dummy, "seek", "decoder_length", (FLAC__uint64) -1);
+
     pos = newpos ? Long_AsUint64(newpos) : (FLAC__uint64) -1;
     Py_XDECREF(oldpos);
     Py_XDECREF(newpos);
@@ -795,14 +831,11 @@ encoder_write(const FLAC__StreamEncoder *encoder,
 
         bytesobj = PyBytes_FromStringAndSize((void *) buffer, bytes);
         count = PyObject_CallMethod(self->fileobj, "write", "(O)", bytesobj);
-        n = count ? PyLong_AsSize_t(count) : (size_t) -1;
+        n = check_return_uint(count, "write", "encoder_write", bytes);
         Py_XDECREF(bytesobj);
         Py_XDECREF(count);
 
         if (PyErr_Occurred()) {
-            return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
-        } else if (n > bytes) {
-            PyErr_SetString(PyExc_ValueError, "invalid result from write");
             return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
         } else {
             bytes -= n;
@@ -824,6 +857,7 @@ encoder_seek(const FLAC__StreamEncoder *encoder,
 
     dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
                                 (unsigned long long) absolute_byte_offset);
+    check_return_uint(dummy, "seek", "encoder_seek", (FLAC__uint64) -1);
     Py_XDECREF(dummy);
 
     if (PyErr_Occurred())
@@ -845,7 +879,8 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
         return FLAC__STREAM_ENCODER_TELL_STATUS_UNSUPPORTED;
 
     result = PyObject_CallMethod(self->fileobj, "tell", "()");
-    pos = result ? Long_AsUint64(result) : (FLAC__uint64) -1;
+    pos = check_return_uint(result, "tell", "encoder_tell",
+                            (FLAC__uint64) -1);
     Py_XDECREF(result);
 
     if (PyErr_Occurred()) {
