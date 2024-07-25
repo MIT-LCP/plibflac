@@ -175,13 +175,18 @@ decoder_read(const FLAC__StreamDecoder *decoder,
     memview = PyMemoryView_FromMemory((void *) buffer, max, PyBUF_WRITE);
     if (memview != NULL)
         count = PyObject_CallMethod(self->fileobj, "readinto", "(O)", memview);
-    n = check_return_uint(count, "readinto", "decoder_read", max);
+    if (count != Py_None)
+        n = check_return_uint(count, "readinto", "decoder_read", max);
     Py_XDECREF(memview);
     Py_XDECREF(count);
 
     if (PyErr_Occurred()) {
         return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
+    } else if (count == Py_None) {
+        /* None means stream is non-blocking and no data available */
+        return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
     } else if (n == 0) {
+        /* Zero means end of file */
         *bytes = 0;
         self->eof = 1;
         return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
