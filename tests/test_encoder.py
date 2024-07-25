@@ -25,12 +25,12 @@ class TestEncoder(unittest.TestCase):
         """
         fileobj = io.BytesIO()
 
-        encoder = plibflac.encoder(fileobj)
+        encoder = plibflac.Encoder(fileobj)
         encoder.open()
         encoder.close()
 
         fileobj.seek(0)
-        decoder = plibflac.decoder(fileobj)
+        decoder = plibflac.Decoder(fileobj)
         decoder.open()
 
         decoder.read_metadata()
@@ -55,13 +55,13 @@ class TestEncoder(unittest.TestCase):
         channel0 = _random_array(1234, 5000, -32768, 32767)
         channel1 = _random_array(5678, 5000, -32768, 32767)
 
-        encoder = plibflac.encoder(fileobj)
+        encoder = plibflac.Encoder(fileobj)
         encoder.open()
         encoder.write([channel0, channel1])
         encoder.close()
 
         fileobj.seek(0)
-        decoder = plibflac.decoder(fileobj)
+        decoder = plibflac.Decoder(fileobj)
         decoder.open()
 
         decoder.read_metadata()

@@ -16,7 +16,7 @@ class TestDecoder(unittest.TestCase):
         Test reading /dev/null as a raw FLAC stream.
         """
         with open(os.devnull, 'rb') as fileobj:
-            decoder = plibflac.decoder(fileobj)
+            decoder = plibflac.Decoder(fileobj)
             decoder.open()
             data = decoder.read(1000)
             self.assertIsNone(data)
@@ -27,7 +27,7 @@ class TestDecoder(unittest.TestCase):
         Test reading metadata from a FLAC file.
         """
         with open(self.data_path('100s.flac'), 'rb') as fileobj:
-            decoder = plibflac.decoder(fileobj)
+            decoder = plibflac.Decoder(fileobj)
             decoder.open()
 
             self.assertEqual(decoder.channels, 0)
@@ -49,7 +49,7 @@ class TestDecoder(unittest.TestCase):
         Test reading a FLAC file sequentially.
         """
         with open(self.data_path('100s.flac'), 'rb') as fileobj:
-            decoder = plibflac.decoder(fileobj)
+            decoder = plibflac.Decoder(fileobj)
             decoder.open()
 
             # Samples 0 to 10 (unbuffered)
