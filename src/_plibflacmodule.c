@@ -902,6 +902,9 @@ Encoder_open(EncoderObject *self, PyObject *args)
                                               &encoder_tell,
                                               NULL, self);
 
+    if (PyErr_Occurred())
+        goto done;
+
     if (status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
         PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
                      FLAC__StreamEncoderInitStatusString[status]);
@@ -926,6 +929,9 @@ Encoder_close(EncoderObject *self, PyObject *args)
         goto done;
 
     ok = FLAC__stream_encoder_finish(self->encoder);
+
+    if (PyErr_Occurred())
+        goto done;
 
     if (!ok) {
         state = FLAC__stream_encoder_get_state(self->encoder);
