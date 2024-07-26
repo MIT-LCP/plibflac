@@ -607,7 +607,8 @@ Decoder_read(DecoderObject *self, PyObject *args)
         if (PyErr_Occurred())
             goto fail;
 
-        if (state == FLAC__STREAM_DECODER_END_OF_STREAM)
+        if ((state == FLAC__STREAM_DECODER_END_OF_STREAM ||
+             state == FLAC__STREAM_DECODER_ABORTED))
             break;
 
         if (!ok) {
