@@ -1024,7 +1024,7 @@ Encoder_write(EncoderObject *self, PyObject *args)
     PyObject *seq, *arrays[FLAC__MAX_CHANNELS] = {NULL},
         *memview, *memview2, *result = NULL;
     FLAC__int32 *data[FLAC__MAX_CHANNELS] = {NULL};
-    Py_ssize_t channels, i;
+    size_t channels, i;
     Py_ssize_t nsamples = 0, nsamples_i;
     FLAC__StreamEncoderState state;
     FLAC__bool ok;
