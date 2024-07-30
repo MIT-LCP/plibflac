@@ -96,6 +96,21 @@ check_return_uint(PyObject *value, const char *method_name,
     return n;
 }
 
+static PyObject *
+MemoryView_FromMem(void *ptr, size_t size)
+{
+#if !defined(Py_LIMITED_API) && defined(PYPY_VERSION)
+    /* Workaround for buggy PyMemoryView_FromMemory in PyPy (<= 7.3.16) */
+    Py_buffer b;
+    if (PyBuffer_FillInfo(&b, NULL, ptr, size, 0, PyBUF_WRITABLE) < 0)
+        return NULL;
+    else
+        return PyMemoryView_FromBuffer(&b);
+#else
+    return PyMemoryView_FromMemory(ptr, size, PyBUF_WRITE);
+#endif
+}
+
 /****************************************************************/
 
 /* Simple check to prevent calling decoder/encoder methods from within
@@ -223,7 +238,7 @@ decoder_read(const FLAC__StreamDecoder *decoder,
     if (PyErr_Occurred())
         return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
 
-    memview = PyMemoryView_FromMemory((void *) buffer, max, PyBUF_WRITE);
+    memview = MemoryView_FromMem(buffer, max);
     if (memview != NULL)
         count = PyObject_CallMethod(self->fileobj, "readinto", "(O)", memview);
     if (count != Py_None)
@@ -1122,9 +1137,7 @@ Encoder_write(EncoderObject *self, PyObject *args)
             goto done;
         }
 
-        memview = PyMemoryView_FromMemory((void *) data[i],
-                                          nsamples * sizeof(FLAC__int32),
-                                          PyBUF_WRITE);
+        memview = MemoryView_FromMem(data[i], nsamples * sizeof(FLAC__int32));
         memview2 = PyObject_CallMethod(memview, "cast", "(s)", INT32_FORMAT);
         Py_XDECREF(memview);
         if (PySequence_SetSlice(memview2, 0, nsamples, arrays[i]) < 0) {
