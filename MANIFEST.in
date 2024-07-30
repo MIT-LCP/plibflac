@@ -1,2 +1,3 @@
 include LICENSE
 recursive-include tests *.py *.flac
+recursive-include flac *
