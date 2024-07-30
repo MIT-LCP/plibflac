@@ -815,10 +815,12 @@ static PyMemberDef Decoder_members[] = {
     {NULL}
 };
 
+PROPERTY_FUNCS(Decoder, decoder, md5_checking, FLAC__bool,
+               PyBool_FromLong, Long_AsBool)
+
 static PyGetSetDef Decoder_properties[] = {
-    {"total_samples",
-     (getter)Decoder_total_samples_getter, NULL,
-     PyDoc_STR("Total length of stream, in samples"), NULL},
+    PROPERTY_DEF_RO(Decoder, total_samples),
+    PROPERTY_DEF_RW(Decoder, md5_checking),
     {NULL}
 };
 
