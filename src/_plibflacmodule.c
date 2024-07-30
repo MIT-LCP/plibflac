@@ -835,7 +835,7 @@ static PyType_Slot Decoder_Type_slots[] = {
 };
 
 static PyType_Spec Decoder_Type_spec = {
-    "plibflac._io.Decoder",
+    "_plibflac.Decoder",
     sizeof(DecoderObject),
     0,
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
@@ -1300,7 +1300,7 @@ static PyType_Slot Encoder_Type_slots[] = {
 };
 
 static PyType_Spec Encoder_Type_spec = {
-    "plibflac._io.Encoder",
+    "_plibflac.Encoder",
     sizeof(EncoderObject),
     0,
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
