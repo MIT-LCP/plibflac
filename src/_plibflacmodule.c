@@ -128,6 +128,57 @@ recursion_check(const char **busy_method, const char *this_method)
 }
 
 /****************************************************************/
+
+#define PROPERTY_DEF_RO(Obj, prop)                            \
+    {#prop, (getter)Obj##_##prop##_getter, NULL, NULL, NULL}
+
+#define PROPERTY_DEF_RW(Obj, prop)                            \
+    {#prop, (getter)Obj##_##prop##_getter,                    \
+     (setter)Obj##_##prop##_setter, NULL, NULL}
+
+#define PROPERTY_FUNCS(Obj, obj, prop, type, to_pyobj, from_pyobj)      \
+    static PyObject *                                                   \
+    Obj##_##prop##_getter(Obj##Object *self, void *closure)             \
+    {                                                                   \
+        type value = FLAC__stream_##obj##_get_##prop(self->obj);        \
+        return to_pyobj(value);                                         \
+    }                                                                   \
+    static int                                                          \
+    Obj##_##prop##_setter(Obj##Object *self, PyObject *value,           \
+                          void *closure)                                \
+    {                                                                   \
+        type n;                                                         \
+        if (!value) {                                                   \
+            PyErr_Format(PyExc_AttributeError,                          \
+                         "cannot delete attribute '%s'", #prop);        \
+            return -1;                                                  \
+        }                                                               \
+        if (!PyLong_Check(value)) {                                     \
+            PyErr_Format(PyExc_TypeError,                               \
+                         "invalid type for attribute '%s'", #prop);     \
+            return -1;                                                  \
+        }                                                               \
+        n = from_pyobj(value);                                          \
+        if (PyErr_Occurred())                                           \
+            return -1;                                                  \
+        if (!FLAC__stream_##obj##_set_##prop(self->obj, n)) {           \
+            PyErr_Format(PyExc_AttributeError,                          \
+                         "cannot set '%s' after open()", #prop);        \
+            return -1;                                                  \
+        }                                                               \
+        return 0;                                                       \
+    }
+#define PROPERTY_BOOL(Obj, obj, prop)                                   \
+    PROPERTY_FUNCS(Obj, obj, prop, FLAC__bool,                          \
+                   PyBool_FromLong, Long_AsBool)
+#define PROPERTY_UINT32(Obj, obj, prop)                                 \
+    PROPERTY_FUNCS(Obj, obj, prop, uint32_t,                            \
+                   PyLong_FromUnsignedLong, Long_AsUint32)
+#define PROPERTY_UINT64(Obj, obj, prop)                                 \
+    PROPERTY_FUNCS(Obj, obj, prop, FLAC__uint64,                        \
+                   PyLong_FromUnsignedLongLong, Long_AsUint64)
+
+/****************************************************************/
 /* Decoder objects */
 
 typedef struct {
@@ -1118,63 +1169,21 @@ static PyMethodDef Encoder_methods[] = {
     {NULL}
 };
 
-#define ENCODER_PROPERTY_FUNCS(prop, type, to_pyobj, from_pyobj)        \
-    static PyObject *                                                   \
-    Encoder_##prop##_getter(EncoderObject *self, void *closure)         \
-    {                                                                   \
-        type value = FLAC__stream_encoder_get_##prop(self->encoder);    \
-        return to_pyobj(value);                                         \
-    }                                                                   \
-    static int                                                          \
-    Encoder_##prop##_setter(EncoderObject *self, PyObject *value,       \
-                            void *closure)                              \
-    {                                                                   \
-        type n;                                                         \
-        if (!value) {                                                   \
-            PyErr_Format(PyExc_AttributeError,                          \
-                         "cannot delete attribute '%s'", #prop);        \
-            return -1;                                                  \
-        }                                                               \
-        if (!PyLong_Check(value)) {                                     \
-            PyErr_Format(PyExc_TypeError,                               \
-                         "invalid type for attribute '%s'", #prop);     \
-            return -1;                                                  \
-        }                                                               \
-        n = from_pyobj(value);                                          \
-        if (PyErr_Occurred())                                           \
-            return -1;                                                  \
-        if (!FLAC__stream_encoder_set_##prop(self->encoder, n)) {       \
-            PyErr_Format(PyExc_AttributeError,                          \
-                         "cannot set '%s' after open()", #prop);        \
-            return -1;                                                  \
-        }                                                               \
-        return 0;                                                       \
-    }
-#define ENCODER_PROPERTY_BOOL(prop)                                     \
-    ENCODER_PROPERTY_FUNCS(prop, FLAC__bool,                            \
-                           PyBool_FromLong, Long_AsBool)
-#define ENCODER_PROPERTY_UINT32(prop)                                   \
-    ENCODER_PROPERTY_FUNCS(prop, uint32_t,                              \
-                           PyLong_FromUnsignedLong, Long_AsUint32)
-#define ENCODER_PROPERTY_UINT64(prop)                                   \
-    ENCODER_PROPERTY_FUNCS(prop, FLAC__uint64,                          \
-                           PyLong_FromUnsignedLongLong, Long_AsUint64)
-
-ENCODER_PROPERTY_UINT32(channels)
-ENCODER_PROPERTY_UINT32(bits_per_sample)
-ENCODER_PROPERTY_UINT32(sample_rate)
-ENCODER_PROPERTY_UINT64(total_samples_estimate)
-ENCODER_PROPERTY_BOOL(streamable_subset)
-ENCODER_PROPERTY_BOOL(verify)
-ENCODER_PROPERTY_UINT32(blocksize)
-ENCODER_PROPERTY_BOOL(do_mid_side_stereo)
-ENCODER_PROPERTY_BOOL(loose_mid_side_stereo)
-ENCODER_PROPERTY_UINT32(max_lpc_order)
-ENCODER_PROPERTY_UINT32(qlp_coeff_precision)
-ENCODER_PROPERTY_BOOL(do_qlp_coeff_prec_search)
-ENCODER_PROPERTY_BOOL(do_exhaustive_model_search)
-ENCODER_PROPERTY_UINT32(min_residual_partition_order)
-ENCODER_PROPERTY_UINT32(max_residual_partition_order)
+PROPERTY_UINT32(Encoder, encoder, channels)
+PROPERTY_UINT32(Encoder, encoder, bits_per_sample)
+PROPERTY_UINT32(Encoder, encoder, sample_rate)
+PROPERTY_UINT64(Encoder, encoder, total_samples_estimate)
+PROPERTY_BOOL(Encoder, encoder, streamable_subset)
+PROPERTY_BOOL(Encoder, encoder, verify)
+PROPERTY_UINT32(Encoder, encoder, blocksize)
+PROPERTY_BOOL(Encoder, encoder, do_mid_side_stereo)
+PROPERTY_BOOL(Encoder, encoder, loose_mid_side_stereo)
+PROPERTY_UINT32(Encoder, encoder, max_lpc_order)
+PROPERTY_UINT32(Encoder, encoder, qlp_coeff_precision)
+PROPERTY_BOOL(Encoder, encoder, do_qlp_coeff_prec_search)
+PROPERTY_BOOL(Encoder, encoder, do_exhaustive_model_search)
+PROPERTY_UINT32(Encoder, encoder, min_residual_partition_order)
+PROPERTY_UINT32(Encoder, encoder, max_residual_partition_order)
 
 static PyObject *
 Encoder_compression_level_getter(EncoderObject *self, void *closure)
@@ -1258,28 +1267,24 @@ Encoder_apodization_setter(EncoderObject *self, PyObject *value,
     return 0;
 }
 
-#define ENCODER_PROPERTY_DEF(prop)                              \
-    {#prop, (getter)Encoder_##prop##_getter,                    \
-     (setter)Encoder_##prop##_setter, NULL, NULL}
-
 static PyGetSetDef Encoder_properties[] = {
-    ENCODER_PROPERTY_DEF(channels),
-    ENCODER_PROPERTY_DEF(bits_per_sample),
-    ENCODER_PROPERTY_DEF(sample_rate),
-    ENCODER_PROPERTY_DEF(total_samples_estimate),
-    ENCODER_PROPERTY_DEF(streamable_subset),
-    ENCODER_PROPERTY_DEF(verify),
-    ENCODER_PROPERTY_DEF(compression_level),
-    ENCODER_PROPERTY_DEF(blocksize),
-    ENCODER_PROPERTY_DEF(do_mid_side_stereo),
-    ENCODER_PROPERTY_DEF(loose_mid_side_stereo),
-    ENCODER_PROPERTY_DEF(apodization),
-    ENCODER_PROPERTY_DEF(max_lpc_order),
-    ENCODER_PROPERTY_DEF(qlp_coeff_precision),
-    ENCODER_PROPERTY_DEF(do_qlp_coeff_prec_search),
-    ENCODER_PROPERTY_DEF(do_exhaustive_model_search),
-    ENCODER_PROPERTY_DEF(min_residual_partition_order),
-    ENCODER_PROPERTY_DEF(max_residual_partition_order),
+    PROPERTY_DEF_RW(Encoder, channels),
+    PROPERTY_DEF_RW(Encoder, bits_per_sample),
+    PROPERTY_DEF_RW(Encoder, sample_rate),
+    PROPERTY_DEF_RW(Encoder, total_samples_estimate),
+    PROPERTY_DEF_RW(Encoder, streamable_subset),
+    PROPERTY_DEF_RW(Encoder, verify),
+    PROPERTY_DEF_RW(Encoder, compression_level),
+    PROPERTY_DEF_RW(Encoder, blocksize),
+    PROPERTY_DEF_RW(Encoder, do_mid_side_stereo),
+    PROPERTY_DEF_RW(Encoder, loose_mid_side_stereo),
+    PROPERTY_DEF_RW(Encoder, apodization),
+    PROPERTY_DEF_RW(Encoder, max_lpc_order),
+    PROPERTY_DEF_RW(Encoder, qlp_coeff_precision),
+    PROPERTY_DEF_RW(Encoder, do_qlp_coeff_prec_search),
+    PROPERTY_DEF_RW(Encoder, do_exhaustive_model_search),
+    PROPERTY_DEF_RW(Encoder, min_residual_partition_order),
+    PROPERTY_DEF_RW(Encoder, max_residual_partition_order),
     {NULL}
 };
 
