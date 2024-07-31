@@ -75,7 +75,7 @@ class Decoder:
             return getattr(self._decoder, name)
 
         def fset(self, value):
-            setattr(self._decoder, name)
+            setattr(self._decoder, name, value)
 
         return property(fget, fset, None, doc)
 

@@ -67,7 +67,7 @@ class Encoder:
             return getattr(self._encoder, name)
 
         def fset(self, value):
-            setattr(self._encoder, name)
+            setattr(self._encoder, name, value)
 
         return property(fget, fset, None, doc)
 
