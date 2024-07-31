@@ -83,3 +83,4 @@ class Decoder:
     bits_per_sample = _prop('bits_per_sample')
     sample_rate = _prop('sample_rate')
     total_samples = _prop('total_samples')
+    md5_checking = _prop('md5_checking')
