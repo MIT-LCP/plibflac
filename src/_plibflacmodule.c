@@ -88,7 +88,7 @@ check_return_uint(PyObject *value, const char *method_name,
         n = PyLong_AsSize_t(value);
 
     if (PyErr_Occurred() || n > max_value) {
-        PyErr_Format(PyExc_TypeError,
+        PyErr_Format(PyExc_ValueError,
                      "%s() returned %R, which is out of range (in %s)",
                      method_name, value, caller);
         return 0;
