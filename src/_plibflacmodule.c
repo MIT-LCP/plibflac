@@ -208,6 +208,7 @@ typedef struct {
     PyObject_HEAD
 
     const char          *busy_method;
+    PyObject            *module;
 
     PyObject            *fileobj;
     FLAC__StreamDecoder *decoder;
@@ -513,7 +514,7 @@ decoder_clear_internal(DecoderObject *self)
 }
 
 static DecoderObject *
-newDecoderObject(PyObject *fileobj)
+newDecoderObject(PyObject *module, PyObject *fileobj)
 {
     DecoderObject *self;
     unsigned int i;
@@ -525,6 +526,8 @@ newDecoderObject(PyObject *fileobj)
     self->busy_method = NULL;
     self->decoder = FLAC__stream_decoder_new();
     self->eof = 0;
+    self->module = module;
+    Py_XINCREF(self->module);
     self->fileobj = fileobj;
     Py_XINCREF(self->fileobj);
 
@@ -549,6 +552,7 @@ newDecoderObject(PyObject *fileobj)
 static int
 Decoder_traverse(DecoderObject *self, visitproc visit, void *arg)
 {
+    Py_VISIT(self->module);
     Py_VISIT(self->fileobj);
     return 0;
 }
@@ -556,6 +560,7 @@ Decoder_traverse(DecoderObject *self, visitproc visit, void *arg)
 static int
 Decoder_clear(DecoderObject *self)
 {
+    Py_CLEAR(self->module);
     Py_CLEAR(self->fileobj);
     return 0;
 }
@@ -567,6 +572,7 @@ Decoder_dealloc(DecoderObject *self)
 
     decoder_clear_internal(self);
 
+    Py_CLEAR(self->module);
     Py_CLEAR(self->fileobj);
 
     if (self->decoder)
@@ -879,7 +885,7 @@ plibflac_decoder(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O:decoder", &fileobj))
         return NULL;
 
-    return (PyObject *) newDecoderObject(fileobj);
+    return (PyObject *) newDecoderObject(self, fileobj);
 }
 
 /****************************************************************/
