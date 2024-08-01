@@ -177,7 +177,7 @@ recursion_check(const char **busy_method, const char *this_method)
         if (PyErr_Occurred())                                           \
             return -1;                                                  \
         if (!FLAC__stream_##obj##_set_##prop(self->obj, n)) {           \
-            PyErr_Format(PyExc_AttributeError,                          \
+            PyErr_Format(PyExc_ValueError,                              \
                          "cannot set '%s' after open()", #prop);        \
             return -1;                                                  \
         }                                                               \
@@ -1225,7 +1225,7 @@ Encoder_compression_level_setter(EncoderObject *self, PyObject *value,
     if (PyErr_Occurred())
         return -1;
     if (!FLAC__stream_encoder_set_compression_level(self->encoder, n)) {
-        PyErr_Format(PyExc_AttributeError,
+        PyErr_Format(PyExc_ValueError,
                      "cannot set 'compression_level' after open()");
         return -1;
     }
@@ -1267,7 +1267,7 @@ Encoder_apodization_setter(EncoderObject *self, PyObject *value,
             PyErr_SetString(PyExc_ValueError, "embedded null character");
         }
         else if (!FLAC__stream_encoder_set_apodization(self->encoder, s)) {
-            PyErr_Format(PyExc_AttributeError,
+            PyErr_Format(PyExc_ValueError,
                          "cannot set 'apodization' after open()");
         }
     }
