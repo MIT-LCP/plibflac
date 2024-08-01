@@ -1107,7 +1107,7 @@ Encoder_write(EncoderObject *self, PyObject *args)
         goto done;
 
     if (channels != FLAC__stream_encoder_get_channels(self->encoder)) {
-        PyErr_SetString(PyExc_TypeError, "length of sequence "
+        PyErr_SetString(PyExc_ValueError, "length of sequence "
                         "must match number of channels");
         goto done;
     }
