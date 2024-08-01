@@ -895,6 +895,7 @@ typedef struct {
     PyObject_HEAD
 
     const char          *busy_method;
+    PyObject            *module;
 
     PyObject            *fileobj;
     FLAC__StreamEncoder *encoder;
@@ -986,7 +987,7 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
 }
 
 static EncoderObject *
-newEncoderObject(PyObject *fileobj)
+newEncoderObject(PyObject *module, PyObject *fileobj)
 {
     EncoderObject *self;
 
@@ -996,6 +997,8 @@ newEncoderObject(PyObject *fileobj)
 
     self->busy_method = NULL;
     self->encoder = FLAC__stream_encoder_new();
+    self->module = module;
+    Py_XINCREF(self->module);
     self->fileobj = fileobj;
     Py_XINCREF(self->fileobj);
     self->apodization = NULL;
@@ -1015,6 +1018,7 @@ newEncoderObject(PyObject *fileobj)
 static int
 Encoder_traverse(EncoderObject *self, visitproc visit, void *arg)
 {
+    Py_VISIT(self->module);
     Py_VISIT(self->fileobj);
     Py_VISIT(self->apodization);
     return 0;
@@ -1023,6 +1027,7 @@ Encoder_traverse(EncoderObject *self, visitproc visit, void *arg)
 static int
 Encoder_clear(EncoderObject *self)
 {
+    Py_CLEAR(self->module);
     Py_CLEAR(self->fileobj);
     Py_CLEAR(self->apodization);
     return 0;
@@ -1033,6 +1038,7 @@ Encoder_dealloc(EncoderObject *self)
 {
     PyObject_GC_UnTrack((PyObject *) self);
 
+    Py_CLEAR(self->module);
     Py_CLEAR(self->fileobj);
     Py_CLEAR(self->apodization);
 
@@ -1358,7 +1364,7 @@ plibflac_encoder(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O:encoder", &fileobj))
         return NULL;
 
-    return (PyObject *) newEncoderObject(fileobj);
+    return (PyObject *) newEncoderObject(self, fileobj);
 }
 
 /****************************************************************/
