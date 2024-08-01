@@ -28,8 +28,6 @@
 # error "type of int32 is unknown!"
 #endif
 
-static PyObject *ErrorObject;
-
 static FLAC__bool
 Long_AsBool(PyObject *n)
 {
@@ -118,6 +116,15 @@ typedef struct {
     PyObject *Encoder_Type;
     PyObject *Error_Type;
 } plibflac_module_state;
+
+static PyObject *
+get_error_type(PyObject *module)
+{
+    plibflac_module_state *st = PyModule_GetState(module);
+    if (!st)
+        return NULL;
+    return st->Error_Type;
+}
 
 /****************************************************************/
 
@@ -621,7 +628,8 @@ Decoder_open(DecoderObject *self, PyObject *args)
                                               self);
 
     if (status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
-        PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
+        PyErr_Format(get_error_type(self->module),
+                     "init_stream failed (state = %s)",
                      FLAC__StreamDecoderInitStatusString[status]);
         goto done;
     }
@@ -650,7 +658,8 @@ Decoder_close(DecoderObject *self, PyObject *args)
     ok = FLAC__stream_decoder_finish(self->decoder);
 
     if (!ok) {
-        PyErr_Format(ErrorObject, "finish failed (MD5 hash incorrect)");
+        PyErr_Format(get_error_type(self->module),
+                     "finish failed (MD5 hash incorrect)");
         goto done;
     }
 
@@ -706,7 +715,8 @@ Decoder_read(DecoderObject *self, PyObject *args)
             break;
 
         if (!ok) {
-            PyErr_Format(ErrorObject, "process_single failed (state = %s)",
+            PyErr_Format(get_error_type(self->module),
+                         "process_single failed (state = %s)",
                          FLAC__StreamDecoderStateString[state]);
             goto fail;
         }
@@ -774,7 +784,8 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
         goto done;
 
     if (!ok) {
-        PyErr_Format(ErrorObject, "read_metadata failed (state = %s)",
+        PyErr_Format(get_error_type(self->module),
+                     "read_metadata failed (state = %s)",
                      FLAC__StreamDecoderStateString[state]);
         goto done;
     }
@@ -814,7 +825,8 @@ Decoder_seek(DecoderObject *self, PyObject *args)
         goto done;
 
     if (!ok) {
-        PyErr_Format(ErrorObject, "seek_absolute failed (state = %s)",
+        PyErr_Format(get_error_type(self->module),
+                     "seek_absolute failed (state = %s)",
                      FLAC__StreamDecoderStateString[state]);
         goto done;
     }
@@ -1088,7 +1100,8 @@ Encoder_open(EncoderObject *self, PyObject *args)
         goto done;
 
     if (status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
-        PyErr_Format(ErrorObject, "init_stream failed (state = %s)",
+        PyErr_Format(get_error_type(self->module),
+                     "init_stream failed (state = %s)",
                      FLAC__StreamEncoderInitStatusString[status]);
         goto done;
     }
@@ -1118,7 +1131,8 @@ Encoder_close(EncoderObject *self, PyObject *args)
 
     if (!ok) {
         state = FLAC__stream_encoder_get_state(self->encoder);
-        PyErr_Format(ErrorObject, "finish failed (state = %s)",
+        PyErr_Format(get_error_type(self->module),
+                     "finish failed (state = %s)",
                      FLAC__StreamEncoderStateString[state]);
         goto done;
     }
@@ -1200,7 +1214,8 @@ Encoder_write(EncoderObject *self, PyObject *args)
 
     if (!ok) {
         state = FLAC__stream_encoder_get_state(self->encoder);
-        PyErr_Format(ErrorObject, "process failed (state = %s)",
+        PyErr_Format(get_error_type(self->module),
+                     "process failed (state = %s)",
                      FLAC__StreamEncoderStateString[state]);
         goto done;
     }
@@ -1436,14 +1451,14 @@ plibflac_exec(PyObject *m)
             return -1;
     }
 
-    if (ErrorObject == NULL) {
-        ErrorObject = PyErr_NewException("plibflac.Error", NULL, NULL);
-        if (ErrorObject == NULL)
+    if (st->Error_Type == NULL) {
+        st->Error_Type = PyErr_NewException("plibflac.Error", NULL, NULL);
+        if (st->Error_Type == NULL)
             return -1;
     }
-    Py_INCREF(ErrorObject);
-    if (PyModule_AddObject(m, "Error", ErrorObject) < 0) {
-        Py_DECREF(ErrorObject);
+    Py_INCREF(st->Error_Type);
+    if (PyModule_AddObject(m, "Error", st->Error_Type) < 0) {
+        Py_DECREF(st->Error_Type);
         return -1;
     }
 
