@@ -123,7 +123,6 @@ MemoryView_FromMem(void *ptr, size_t size)
         if (recursion_check(&self->busy_method, method_name) == 0) {    \
 
 #define END_NO_RECURSION                                                \
-        done:                                                           \
             self->busy_method = NULL;                                   \
         }                                                               \
     } while (0)
@@ -132,9 +131,14 @@ static int
 recursion_check(const char **busy_method, const char *this_method)
 {
     if (*busy_method) {
-        PyErr_Format(PyExc_TypeError,
-                     "%s() called recursively within %s()",
-                     this_method, *busy_method);
+        if (this_method[0] == '.')
+            PyErr_Format(PyExc_TypeError,
+                         "cannot set '%s' within %s()",
+                         &this_method[1], *busy_method);
+        else
+            PyErr_Format(PyExc_TypeError,
+                         "%s() called recursively within %s()",
+                         this_method, *busy_method);
         return -1;
     } else {
         *busy_method = this_method;
@@ -163,6 +167,7 @@ recursion_check(const char **busy_method, const char *this_method)
                           void *closure)                                \
     {                                                                   \
         type n;                                                         \
+        FLAC__bool ok = 0;                                              \
         if (!value) {                                                   \
             PyErr_Format(PyExc_AttributeError,                          \
                          "cannot delete attribute '%s'", #prop);        \
@@ -176,7 +181,10 @@ recursion_check(const char **busy_method, const char *this_method)
         n = from_pyobj(value);                                          \
         if (PyErr_Occurred())                                           \
             return -1;                                                  \
-        if (!FLAC__stream_##obj##_set_##prop(self->obj, n)) {           \
+        BEGIN_NO_RECURSION("." #prop);                                  \
+        ok = FLAC__stream_##obj##_set_##prop(self->obj, n);             \
+        END_NO_RECURSION;                                               \
+        if (!ok) {                                                      \
             PyErr_Format(PyExc_ValueError,                              \
                          "cannot set '%s' after open()", #prop);        \
             return -1;                                                  \
@@ -605,6 +613,7 @@ Decoder_open(DecoderObject *self, PyObject *args)
 
     Py_INCREF((result = Py_None));
 
+ done:                                          \
     END_NO_RECURSION;
     return result;
 }
@@ -630,6 +639,7 @@ Decoder_close(DecoderObject *self, PyObject *args)
 
     Py_INCREF((result = Py_None));
 
+ done:
     END_NO_RECURSION;
     return result;
 }
@@ -721,6 +731,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
     self->out_count = 0;
     self->out_remaining = 0;
 
+ done:
     END_NO_RECURSION;
     return result;
 }
@@ -753,6 +764,7 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
 
     Py_INCREF((result = Py_None));
 
+ done:
     END_NO_RECURSION;
     return result;
 }
@@ -792,6 +804,7 @@ Decoder_seek(DecoderObject *self, PyObject *args)
 
     Py_INCREF((result = Py_None));
 
+ done:
     END_NO_RECURSION;
     return result;
 }
@@ -1056,6 +1069,7 @@ Encoder_open(EncoderObject *self, PyObject *args)
 
     Py_INCREF((result = Py_None));
 
+ done:
     END_NO_RECURSION;
     return result;
 }
@@ -1085,6 +1099,7 @@ Encoder_close(EncoderObject *self, PyObject *args)
 
     Py_INCREF((result = Py_None));
 
+ done:
     END_NO_RECURSION;
     return result;
 }
@@ -1166,6 +1181,7 @@ Encoder_write(EncoderObject *self, PyObject *args)
 
     Py_INCREF((result = Py_None));
 
+ done:
     END_NO_RECURSION;
 
     for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
@@ -1213,6 +1229,7 @@ Encoder_compression_level_setter(EncoderObject *self, PyObject *value,
                                  void *closure)
 {
     uint32_t n;
+    FLAC__bool ok = 0;
     if (!value) {
         PyErr_Format(PyExc_AttributeError,
                      "cannot delete attribute 'compression_level'");
@@ -1226,7 +1243,10 @@ Encoder_compression_level_setter(EncoderObject *self, PyObject *value,
     n = Long_AsUint32(value);
     if (PyErr_Occurred())
         return -1;
-    if (!FLAC__stream_encoder_set_compression_level(self->encoder, n)) {
+    BEGIN_NO_RECURSION(".compression_level");
+    ok = FLAC__stream_encoder_set_compression_level(self->encoder, n);
+    END_NO_RECURSION;
+    if (!ok) {
         PyErr_Format(PyExc_ValueError,
                      "cannot set 'compression_level' after open()");
         return -1;
@@ -1263,6 +1283,7 @@ Encoder_apodization_setter(EncoderObject *self, PyObject *value,
         return -1;
     }
 
+    BEGIN_NO_RECURSION(".apodization");
     bytes = PyUnicode_AsUTF8String(value);
     if (bytes && PyBytes_AsStringAndSize(bytes, &s, &len) == 0) {
         if (len != (Py_ssize_t) strlen(s)) {
@@ -1274,6 +1295,7 @@ Encoder_apodization_setter(EncoderObject *self, PyObject *value,
         }
     }
     Py_XDECREF(bytes);
+    END_NO_RECURSION;
 
     if (PyErr_Occurred())
         return -1;
