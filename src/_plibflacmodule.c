@@ -19,6 +19,12 @@
 # define PyBUF_WRITE 0x200
 #endif
 
+/* Macros added in 3.13 */
+#ifndef Py_BEGIN_CRITICAL_SECTION
+# define Py_BEGIN_CRITICAL_SECTION(obj) {
+# define Py_END_CRITICAL_SECTION() }
+#endif
+
 /****************************************************************/
 
 #if INT_MAX == 0x7fffffff
@@ -155,13 +161,13 @@ get_error_type(PyObject *module)
         self->thread_state = PyEval_SaveThread();       \
     } while (0)
 
-/* Simple check to prevent calling decoder/encoder methods from within
-   I/O callbacks.
-
-   FIXME: Replace this with something actually thread-safe. */
+/* Simple check to prevent calling decoder/encoder methods from
+   multiple threads, or calling methods recursively within I/O
+   callbacks. */
 
 #define BEGIN_NO_RECURSION(method_name)                                 \
     do {                                                                \
+        Py_BEGIN_CRITICAL_SECTION(self);                                \
         if (recursion_check(&self->busy_method, method_name) == 0) {    \
             assert(self->thread_state == NULL);                         \
 
@@ -169,6 +175,7 @@ get_error_type(PyObject *module)
             assert(self->thread_state == NULL);                         \
             self->busy_method = NULL;                                   \
         }                                                               \
+        Py_END_CRITICAL_SECTION();                                      \
     } while (0)
 
 static int
@@ -203,7 +210,10 @@ recursion_check(const char **busy_method, const char *this_method)
     static PyObject *                                                   \
     Obj##_##prop##_getter(Obj##Object *self, void *closure)             \
     {                                                                   \
-        type value = FLAC__stream_##obj##_get_##prop(self->obj);        \
+        type value;                                                     \
+        Py_BEGIN_CRITICAL_SECTION(self);                                \
+        value = FLAC__stream_##obj##_get_##prop(self->obj);             \
+        Py_END_CRITICAL_SECTION();                                      \
         return to_pyobj(value);                                         \
     }                                                                   \
     static int                                                          \
@@ -642,16 +652,20 @@ newDecoderObject(PyObject *module, PyObject *fileobj)
 static int
 Decoder_traverse(DecoderObject *self, visitproc visit, void *arg)
 {
+    Py_BEGIN_CRITICAL_SECTION(self);
     Py_VISIT(self->module);
     Py_VISIT(self->fileobj);
+    Py_END_CRITICAL_SECTION();
     return 0;
 }
 
 static int
 Decoder_clear(DecoderObject *self)
 {
+    Py_BEGIN_CRITICAL_SECTION(self);
     Py_CLEAR(self->module);
     Py_CLEAR(self->fileobj);
+    Py_END_CRITICAL_SECTION();
     return 0;
 }
 
@@ -937,7 +951,9 @@ static PyObject*
 Decoder_total_samples_getter(DecoderObject* self, void *closure)
 {
     FLAC__uint64 n;
+    Py_BEGIN_CRITICAL_SECTION(self);
     n = FLAC__stream_decoder_get_total_samples(self->decoder);
+    Py_END_CRITICAL_SECTION();
     return PyLong_FromUnsignedLongLong(n);
 }
 
@@ -1163,18 +1179,22 @@ newEncoderObject(PyObject *module, PyObject *fileobj)
 static int
 Encoder_traverse(EncoderObject *self, visitproc visit, void *arg)
 {
+    Py_BEGIN_CRITICAL_SECTION(self);
     Py_VISIT(self->module);
     Py_VISIT(self->fileobj);
     Py_VISIT(self->apodization);
+    Py_END_CRITICAL_SECTION();
     return 0;
 }
 
 static int
 Encoder_clear(EncoderObject *self)
 {
+    Py_BEGIN_CRITICAL_SECTION(self);
     Py_CLEAR(self->module);
     Py_CLEAR(self->fileobj);
     Py_CLEAR(self->apodization);
+    Py_END_CRITICAL_SECTION();
     return 0;
 }
 
@@ -1395,7 +1415,11 @@ PROPERTY_UINT32(Encoder, encoder, max_residual_partition_order)
 static PyObject *
 Encoder_compression_level_getter(EncoderObject *self, void *closure)
 {
-    return PyLong_FromUnsignedLong(self->compression_level);
+    unsigned long value;
+    Py_BEGIN_CRITICAL_SECTION(self);
+    value = self->compression_level;
+    Py_END_CRITICAL_SECTION();
+    return PyLong_FromUnsignedLong(value);
 }
 
 static int
@@ -1433,8 +1457,11 @@ Encoder_compression_level_setter(EncoderObject *self, PyObject *value,
 static PyObject *
 Encoder_apodization_getter(EncoderObject *self, void *closure)
 {
-    PyObject *value = self->apodization ? self->apodization : Py_None;
+    PyObject *value;
+    Py_BEGIN_CRITICAL_SECTION(self);
+    value = self->apodization ? self->apodization : Py_None;
     Py_INCREF(value);
+    Py_END_CRITICAL_SECTION();
     return value;
 }
 
@@ -1636,6 +1663,9 @@ plibflac_free(void *m)
 
 static struct PyModuleDef_Slot plibflac_slots[] = {
     {Py_mod_exec, plibflac_exec},
+#ifdef Py_GIL_DISABLED
+    {Py_mod_gil, Py_MOD_GIL_NOT_USED},
+#endif
     {0, NULL},
 };
 
