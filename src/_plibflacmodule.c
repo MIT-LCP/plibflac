@@ -239,8 +239,6 @@ typedef struct {
     } out_attr, buf_attr;
 } DecoderObject;
 
-static PyObject *Decoder_Type;
-
 static FLAC__StreamDecoderReadStatus
 decoder_read(const FLAC__StreamDecoder *decoder,
              FLAC__byte                 buffer[],
@@ -524,10 +522,15 @@ decoder_clear_internal(DecoderObject *self)
 static DecoderObject *
 newDecoderObject(PyObject *module, PyObject *fileobj)
 {
+    plibflac_module_state *st;
     DecoderObject *self;
     unsigned int i;
 
-    self = PyObject_GC_New(DecoderObject, (PyTypeObject *) Decoder_Type);
+    st = PyModule_GetState(module);
+    if (st == NULL)
+        return NULL;
+
+    self = PyObject_GC_New(DecoderObject, (PyTypeObject *) st->Decoder_Type);
     if (self == NULL)
         return NULL;
 
@@ -913,8 +916,6 @@ typedef struct {
     PyObject            *apodization;
 } EncoderObject;
 
-static PyObject *Encoder_Type;
-
 static FLAC__StreamEncoderWriteStatus
 encoder_write(const FLAC__StreamEncoder *encoder,
               const FLAC__byte           buffer[],
@@ -997,9 +998,14 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
 static EncoderObject *
 newEncoderObject(PyObject *module, PyObject *fileobj)
 {
+    plibflac_module_state *st;
     EncoderObject *self;
 
-    self = PyObject_GC_New(EncoderObject, (PyTypeObject *) Encoder_Type);
+    st = PyModule_GetState(module);
+    if (st == NULL)
+        return NULL;
+
+    self = PyObject_GC_New(EncoderObject, (PyTypeObject *) st->Encoder_Type);
     if (self == NULL)
         return NULL;
 
@@ -1411,20 +1417,22 @@ PyDoc_STRVAR(module_doc,
 static int
 plibflac_exec(PyObject *m)
 {
+    plibflac_module_state *st = PyModule_GetState(m);
+
 #ifdef PLIBFLAC_VERSION
     if (PyModule_AddStringConstant(m, "__version__", PLIBFLAC_VERSION) < 0)
         return -1;
 #endif
 
-    if (Decoder_Type == NULL) {
-        Decoder_Type = PyType_FromSpec(&Decoder_Type_spec);
-        if (Decoder_Type == NULL)
+    if (st->Decoder_Type == NULL) {
+        st->Decoder_Type = PyType_FromSpec(&Decoder_Type_spec);
+        if (st->Decoder_Type == NULL)
             return -1;
     }
 
-    if (Encoder_Type == NULL) {
-        Encoder_Type = PyType_FromSpec(&Encoder_Type_spec);
-        if (Encoder_Type == NULL)
+    if (st->Encoder_Type == NULL) {
+        st->Encoder_Type = PyType_FromSpec(&Encoder_Type_spec);
+        if (st->Encoder_Type == NULL)
             return -1;
     }
 
