@@ -95,5 +95,14 @@ class TestDecoder(unittest.TestCase):
         return os.path.join(os.path.dirname(__file__), 'data', name)
 
 
+class TestMisc(unittest.TestCase):
+    def test_version(self):
+        """
+        Test package version information.
+        """
+        self.assertIsInstance(plibflac.flac_version(), str)
+        self.assertIsInstance(plibflac.flac_vendor(), str)
+
+
 if __name__ == '__main__':
     unittest.main()
