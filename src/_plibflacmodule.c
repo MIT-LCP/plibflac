@@ -113,6 +113,14 @@ MemoryView_FromMem(void *ptr, size_t size)
 
 /****************************************************************/
 
+typedef struct {
+    PyObject *Decoder_Type;
+    PyObject *Encoder_Type;
+    PyObject *Error_Type;
+} plibflac_module_state;
+
+/****************************************************************/
+
 /* Simple check to prevent calling decoder/encoder methods from within
    I/O callbacks.
 
@@ -1434,6 +1442,41 @@ plibflac_exec(PyObject *m)
     return 0;
 }
 
+static int
+plibflac_traverse(PyObject *m, visitproc visit, void *arg)
+{
+    plibflac_module_state *st = PyModule_GetState(m);
+    if (st) {
+        Py_VISIT(st->Decoder_Type);
+        Py_VISIT(st->Encoder_Type);
+        Py_VISIT(st->Error_Type);
+    }
+    return 0;
+}
+
+static int
+plibflac_clear(PyObject *m)
+{
+    plibflac_module_state *st = PyModule_GetState(m);
+    if (st) {
+        Py_CLEAR(st->Decoder_Type);
+        Py_CLEAR(st->Encoder_Type);
+        Py_CLEAR(st->Error_Type);
+    }
+    return 0;
+}
+
+static void
+plibflac_free(void *m)
+{
+    plibflac_module_state *st = PyModule_GetState(m);
+    if (st) {
+        Py_CLEAR(st->Decoder_Type);
+        Py_CLEAR(st->Encoder_Type);
+        Py_CLEAR(st->Error_Type);
+    }
+}
+
 static struct PyModuleDef_Slot plibflac_slots[] = {
     {Py_mod_exec, plibflac_exec},
     {0, NULL},
@@ -1443,12 +1486,12 @@ static struct PyModuleDef plibflacmodule = {
     PyModuleDef_HEAD_INIT,
     "_plibflac",
     module_doc,
-    0,
+    sizeof(plibflac_module_state),
     plibflac_methods,
     plibflac_slots,
-    NULL,
-    NULL,
-    NULL
+    plibflac_traverse,
+    plibflac_clear,
+    plibflac_free
 };
 
 #if __GNUC__ >= 4
