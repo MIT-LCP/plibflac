@@ -1333,11 +1333,31 @@ plibflac_encoder(PyObject *self, PyObject *args)
 
 /****************************************************************/
 
+static PyObject *
+plibflac_flac_vendor(PyObject *self, PyObject *args)
+{
+    if (!PyArg_ParseTuple(args, ":flac_vendor"))
+        return NULL;
+    return PyUnicode_FromString(FLAC__VENDOR_STRING);
+}
+
+static PyObject *
+plibflac_flac_version(PyObject *self, PyObject *args)
+{
+    if (!PyArg_ParseTuple(args, ":flac_version"))
+        return NULL;
+    return PyUnicode_FromString(FLAC__VERSION_STRING);
+}
+
 static PyMethodDef plibflac_methods[] = {
     {"decoder", plibflac_decoder, METH_VARARGS,
      PyDoc_STR("decoder(fileobj) -> new Decoder object")},
     {"encoder", plibflac_encoder, METH_VARARGS,
      PyDoc_STR("encoder(fileobj) -> new Encoder object")},
+    {"flac_vendor", plibflac_flac_vendor, METH_VARARGS,
+     PyDoc_STR("flac_vendor() -> str")},
+    {"flac_version", plibflac_flac_version, METH_VARARGS,
+     PyDoc_STR("flac_version() -> str")},
     {NULL, NULL}
 };
 
