@@ -4,6 +4,7 @@ import os
 import platform
 import re
 import sys
+import sysconfig
 
 from setuptools import Extension, setup
 
@@ -17,6 +18,7 @@ _define_macros = [('PLIBFLAC_VERSION', '"%s"' % _version)]
 
 _stable_abi = (3, 5)
 if (platform.python_implementation() == 'CPython'
+        and not sysconfig.get_config_var('Py_GIL_DISABLED')
         and sys.version_info >= _stable_abi):
     _define_macros += [('Py_LIMITED_API', '0x%02x%02x0000' % _stable_abi)]
     _py_limited_api = True
