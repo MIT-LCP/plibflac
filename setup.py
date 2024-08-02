@@ -63,6 +63,10 @@ def _flac_options():
         os.path.join(pkgdir, 'src', 'libFLAC', 'include'),
     ]
 
+    if os.name == 'nt':
+        sources.append(os.path.join(pkgdir, 'src', 'share',
+                                    'win_utf8_io', 'win_utf8_io.c'))
+
     with open(os.path.join(pkgdir, 'CMakeLists.txt')) as f:
         version = re.search(r'\bproject\(FLAC\s+VERSION\s+([^\s\)]+)',
                             f.read()).group(1)
