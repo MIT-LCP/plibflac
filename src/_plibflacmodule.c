@@ -545,10 +545,11 @@ Decoder_traverse(DecoderObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static void
+static int
 Decoder_clear(DecoderObject *self)
 {
     Py_CLEAR(self->fileobj);
+    return 0;
 }
 
 static void
@@ -1000,11 +1001,12 @@ Encoder_traverse(EncoderObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static void
+static int
 Encoder_clear(EncoderObject *self)
 {
     Py_CLEAR(self->fileobj);
     Py_CLEAR(self->apodization);
+    return 0;
 }
 
 static void
