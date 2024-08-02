@@ -1415,6 +1415,9 @@ static struct PyModuleDef plibflacmodule = {
     NULL
 };
 
+#if __GNUC__ >= 4
+__attribute__((visibility("default")))
+#endif
 PyMODINIT_FUNC
 PyInit__plibflac(void)
 {

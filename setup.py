@@ -10,7 +10,7 @@ from setuptools import Extension, setup
 ################################################################
 
 with open('pyproject.toml') as f:
-    _version = re.search('^version *= *"(.*?)"', f.read(), re.M)[1]
+    _version = re.search('^version *= *"(.*?)"', f.read(), re.M).group(1)
 _define_macros = [('PLIBFLAC_VERSION', '"%s"' % _version)]
 
 ################################################################
@@ -62,7 +62,7 @@ def _flac_options():
 
     with open(os.path.join(pkgdir, 'CMakeLists.txt')) as f:
         version = re.search(r'\bproject\(FLAC\s+VERSION\s+([^\s\)]+)',
-                            f.read())[1]
+                            f.read()).group(1)
 
     # Below is the complete list of macros from config.cmake.h.in.
     # Most of these are not relevant for libFLAC.  A few of them
