@@ -1,3 +1,5 @@
+name: style
+
 on:
   pull_request:
   push:

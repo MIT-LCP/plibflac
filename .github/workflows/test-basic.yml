@@ -1,3 +1,5 @@
+name: test-basic
+
 on:
   pull_request:
   push:
