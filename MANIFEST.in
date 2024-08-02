@@ -1,3 +1,4 @@
 include LICENSE
+include src/flac/config.h
 recursive-include tests *.py *.flac
 recursive-include flac *
