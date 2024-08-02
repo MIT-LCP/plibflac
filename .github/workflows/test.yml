@@ -1,0 +1,107 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python-version: "3.9"
+            flac: "bundled"
+          - os: ubuntu-24.04
+            python-version: "3.12"
+            flac: "system"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install build coverage pytest
+          if ! [ -x "$(command -v gcov)" ] ||
+             ! pkg-config --exists flac 2>/dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y gcov libflac-dev pkg-config
+          fi
+
+      - name: Build source package and check contents
+        run: |
+          find * -type f | sort > .git-files
+
+          python -m build -n -s
+
+          tar tfz dist/*.tar.gz | cut -d/ -f2- | grep . |
+            grep -v -e '\.egg-info/' -e '/$' |
+            grep -v -F -x -e 'setup.cfg' -e 'PKG-INFO' |
+            sort > .sdist-files
+
+          diff .git-files .sdist-files
+
+      - name: Build plibflac with coverage tracking
+        run: |
+          if [ '${{ matrix.flac }}' = 'system' ]; then
+              FLAC_CFLAGS=$(pkg-config --cflags flac)
+              FLAC_LIBS=$(pkg-config --libs flac)
+              export FLAC_CFLAGS FLAC_LIBS
+          fi
+
+          env CFLAGS="-Werror -O0 -fno-inline --coverage" \
+            python -m build -n -w
+          pip install dist/*.whl
+
+      - name: Run test suite with coverage tracking
+        run: |
+          python -m coverage run --branch --source=plibflac \
+            -m pytest --verbose tests
+
+      - name: Build plibflac with assertions
+        run: |
+          if [ '${{ matrix.flac }}' = 'system' ]; then
+              FLAC_CFLAGS=$(pkg-config --cflags flac)
+              FLAC_LIBS=$(pkg-config --libs flac)
+              export FLAC_CFLAGS FLAC_LIBS
+          fi
+
+          pip uninstall -y plibflac
+          env CFLAGS="-Werror -fsanitize=undefined -UNDEBUG" \
+            pip install -v -v --no-build-isolation \
+              dist/plibflac-*.tar.gz
+
+      - name: Run test suite with assertions
+        run: |
+          env PYTHONMALLOC=pymalloc_debug \
+              UBSAN_OPTIONS=halt_on_error=1 \
+            python -m pytest --verbose --capture=no tests
+
+      - name: Python coverage report
+        run: |
+          python -m coverage report -m
+          python -m coverage html
+
+      - name: C coverage report
+        run: |
+          mv $(find build/ -name '*.gcno') src/
+          mv $(find build/ -name '*.gcda') src/
+          gcov -bc src/*.c
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage-${{ matrix.os }}
+          path: |
+            .coverage
+            htmlcov/
+            src/*.gcno
+            src/*.gcda
+            *.gcov
