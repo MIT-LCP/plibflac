@@ -1,0 +1,31 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  style:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+
+      - name: Install dependencies
+        run: pip install pycodestyle
+
+      - name: Check Python formatting
+        run: python -m pycodestyle .
+
+      - name: Check general formatting
+        run: |
+          git config --local core.whitespace tab-in-indent
+          git diff --check $(git hash-object -t tree /dev/null)
+
+          if git grep -q -I -E '.{80}'; then
+              echo "Lines exceeding 79 characters:"
+              git grep -I -E '.{80}'
+              exit 1
+          fi
