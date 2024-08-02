@@ -1,0 +1,35 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-basic:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            python-version: "3.10"
+          - os: windows-2022
+            python-version: "3.11"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build plibflac
+        run: pip install -v -v .
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Run test suite
+        run: python -m pytest --verbose tests
