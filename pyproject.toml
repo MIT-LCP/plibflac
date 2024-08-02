@@ -18,3 +18,7 @@ requires-python = ">=3.5"
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[tool.cibuildwheel]
+test-requires = "pytest"
+test-command = "pytest --verbose {package}/tests"
