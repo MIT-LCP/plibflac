@@ -9,14 +9,12 @@ import _plibflac
 
 class Decoder:
     def __init__(self, file, **options):
-        try:
-            path = os.fspath(file)
-        except TypeError:
+        if isinstance(file, (str, bytes)) or hasattr(file, '__fspath__'):
+            self._fileobj = open(file, 'rb')
+            self._closefile = True
+        else:
             self._fileobj = file
             self._closefile = False
-        else:
-            self._fileobj = open(path, 'rb')
-            self._closefile = True
 
         self._opened = False
 
