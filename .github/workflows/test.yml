@@ -100,7 +100,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: test-coverage-${{ matrix.os }}
+          name: test-coverage-${{ matrix.flac }}-${{ strategy.job-index }}
           path: |
             .coverage
             htmlcov/
