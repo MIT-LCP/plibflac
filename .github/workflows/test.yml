@@ -32,9 +32,8 @@ jobs:
           pip install build coverage pytest
           if ! [ -x "$(command -v gcov)" ] ||
              ! pkg-config --exists flac 2>/dev/null; then
-              sudo apt-add-repository universe
               sudo apt-get update
-              sudo apt-get install -y gcov libflac-dev pkg-config
+              sudo apt-get install -y gcc libflac-dev pkg-config
           fi
 
       - name: Build source package and check contents
