@@ -6,7 +6,7 @@ import _plibflac
 
 
 class Decoder:
-    def __init__(self, file, **options):
+    def __init__(self, file, *, md5_checking=False):
         if isinstance(file, (str, bytes)) or hasattr(file, '__fspath__'):
             self._fileobj = open(file, 'rb')
             self._closefile = True
@@ -27,8 +27,7 @@ class Decoder:
                 raise ValueError("file is not readable")
 
             self._decoder = _plibflac.decoder(self._fileobj)
-            for name, value in options.items():
-                setattr(self._decoder, name, value)
+            self.md5_checking = md5_checking
         except BaseException:
             if self._closefile:
                 self._fileobj.close()
