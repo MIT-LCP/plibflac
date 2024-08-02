@@ -73,6 +73,7 @@ def _flac_options():
 
     define_macros = [
         ('HAVE_CONFIG_H', '1'),
+        ('FLAC__NO_DLL', '1'),
         ('PLIBFLAC_FLAC_VERSION', '"%s"' % version),
         ('PLIBFLAC_WORDS_BIGENDIAN', str(int(sys.byteorder == 'big'))),
     ]
