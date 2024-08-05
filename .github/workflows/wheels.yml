@@ -1,3 +1,5 @@
+name: wheels
+
 on:
   pull_request:
     paths:
