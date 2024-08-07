@@ -600,6 +600,13 @@ Decoder_dealloc(DecoderObject *self)
 }
 
 static PyObject *
+Decoder_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds)
+{
+    PyErr_SetString(PyExc_TypeError, "cannot create 'Decoder' instances");
+    return NULL;
+}
+
+static PyObject *
 Decoder_open(DecoderObject *self, PyObject *args)
 {
     FLAC__StreamDecoderInitStatus status;
@@ -886,6 +893,7 @@ static PyType_Slot Decoder_Type_slots[] = {
     {Py_tp_dealloc,  Decoder_dealloc},
     {Py_tp_traverse, Decoder_traverse},
     {Py_tp_clear,    Decoder_clear},
+    {Py_tp_new,      Decoder_new},
     {Py_tp_methods,  Decoder_methods},
     {Py_tp_members,  Decoder_members},
     {Py_tp_getset,   Decoder_properties},
@@ -1072,6 +1080,13 @@ Encoder_dealloc(EncoderObject *self)
         FLAC__stream_encoder_delete(self->encoder);
 
     PyObject_GC_Del(self);
+}
+
+static PyObject *
+Encoder_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds)
+{
+    PyErr_SetString(PyExc_TypeError, "cannot create 'Encoder' instances");
+    return NULL;
 }
 
 static PyObject *
@@ -1372,6 +1387,7 @@ static PyType_Slot Encoder_Type_slots[] = {
     {Py_tp_dealloc,  Encoder_dealloc},
     {Py_tp_traverse, Encoder_traverse},
     {Py_tp_clear,    Encoder_clear},
+    {Py_tp_new,      Encoder_new},
     {Py_tp_methods,  Encoder_methods},
     {Py_tp_getset,   Encoder_properties},
     {0, 0}
