@@ -12,13 +12,14 @@ Xiph.Org.
 Installation
 ------------
 
-Install this package by running:
+Install this package from PyPI by running:
 ```
-pip install .
+pip install plibflac
 ```
 
-You will need to have a C compiler and the Python headers installed,
-as well as libFLAC and its headers.
+If you want to build the package from source (e.g., from the git
+repository), you will need to have a C compiler and the Python headers
+installed.
 
 
 Project goals
