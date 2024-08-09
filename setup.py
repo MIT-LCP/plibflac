@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import copy
 import os
 import platform
 import re
@@ -7,6 +8,7 @@ import sys
 import sysconfig
 
 from setuptools import Extension, setup
+from setuptools.command.build_ext import build_ext
 
 ################################################################
 
@@ -30,7 +32,7 @@ else:
 ################################################################
 
 
-def _flac_options():
+def _flac_options(compiler, build_temp):
     # To use a copy of libFLAC that is already installed, set the
     # environment variable FLAC_CFLAGS to the list of compiler flags
     # and FLAC_LIBS to the list of linker flags.  You can determine
@@ -82,6 +84,23 @@ def _flac_options():
         ('PLIBFLAC_WORDS_BIGENDIAN', str(int(sys.byteorder == 'big'))),
     ]
 
+    # Test running the compiler to check for optional system features.
+
+    def try_compile(src_name, extra_compile_args=[], trap_errors=True):
+        src_path = os.path.join('src', 'conf', src_name)
+        assert os.path.isfile(src_path), "%s not found" % src_path
+        try:
+            compiler.compile([src_path], output_dir=build_temp,
+                             extra_postargs=extra_compile_args)
+            return True
+        except Exception:
+            if trap_errors:
+                return False
+            raise
+
+    # Check that the compiler works.
+    try_compile('conftest.c', trap_errors=False)
+
     # On most *nix platforms, we must use -fvisibility=hidden to
     # prevent the internal libFLAC from conflicting with any shared
     # libraries.  This shouldn't be necessary for Windows, and may not
@@ -99,7 +118,15 @@ def _flac_options():
     }
 
 
-_flac = _flac_options()
+class custom_build_ext(build_ext):
+    def build_extension(self, ext):
+        ext = copy.copy(ext)
+        flac = _flac_options(self.compiler, self.build_temp)
+        for key, value in flac.items():
+            setattr(ext, key, getattr(ext, key) + value)
+
+        super().build_extension(ext)
+
 
 ################################################################
 
@@ -111,20 +138,14 @@ setup(
     ext_modules=[
         Extension(
             name="_plibflac",
-            sources=[
-                'src/_plibflacmodule.c',
-                *_flac['sources'],
-            ],
-            define_macros=[
-                *_define_macros,
-                *_flac['define_macros'],
-            ],
-            include_dirs=_flac['include_dirs'],
-            extra_compile_args=_flac['extra_compile_args'],
-            extra_link_args=_flac['extra_link_args'],
+            sources=['src/_plibflacmodule.c'],
+            define_macros=_define_macros,
             py_limited_api=_py_limited_api,
         ),
     ],
+    cmdclass={
+        'build_ext': custom_build_ext,
+    },
     options={
         'bdist_wheel': _bdist_wheel_options,
     },
