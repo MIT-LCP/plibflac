@@ -2,8 +2,6 @@
 Internal functions for writing FLAC streams.
 """
 
-import os
-
 import _plibflac
 
 

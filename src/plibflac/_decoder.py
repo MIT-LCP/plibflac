@@ -2,8 +2,6 @@
 Internal functions for reading FLAC streams.
 """
 
-import os
-
 import _plibflac
 
 
