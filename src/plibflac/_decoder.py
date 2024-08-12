@@ -218,13 +218,13 @@ class Decoder:
         self._decoder.seek(sample_number)
 
     def _prop(name, doc=None):
-        def fget(self):
+        def _fget(self):
             return getattr(self._decoder, name)
 
-        def fset(self, value):
+        def _fset(self, value):
             setattr(self._decoder, name, value)
 
-        return property(fget, fset, None, doc)
+        return property(_fget, _fset, None, doc)
 
     channels = _prop(
         'channels',
