@@ -6,7 +6,24 @@ import _plibflac
 
 
 class Encoder:
-    def __init__(self, file, **options):
+    def __init__(self, file, *,
+                 channels=2,
+                 bits_per_sample=16,
+                 sample_rate=44100,
+                 total_samples_estimate=None,
+                 compression_level=None,
+                 streamable_subset=True,
+                 verify=False,
+                 blocksize=None,
+                 do_mid_side_stereo=None,
+                 loose_mid_side_stereo=None,
+                 apodization=None,
+                 max_lpc_order=None,
+                 qlp_coeff_precision=None,
+                 do_qlp_coeff_prec_search=None,
+                 do_exhaustive_model_search=None,
+                 min_residual_partition_order=None,
+                 max_residual_partition_order=None):
         if isinstance(file, (str, bytes)) or hasattr(file, '__fspath__'):
             self._fileobj = open(file, 'wb')
             self._closefile = True
@@ -22,13 +39,34 @@ class Encoder:
             raise TypeError("file must be a filesystem path or a binary file "
                             "object, not {!r}".format(type(self._fileobj)))
 
+        options = {
+            'channels': channels,
+            'bits_per_sample': bits_per_sample,
+            'sample_rate': sample_rate,
+            'total_samples_estimate': total_samples_estimate,
+            'compression_level': compression_level,
+            'streamable_subset': streamable_subset,
+            'verify': verify,
+            'blocksize': blocksize,
+            'do_mid_side_stereo': do_mid_side_stereo,
+            'loose_mid_side_stereo': loose_mid_side_stereo,
+            'apodization': apodization,
+            'max_lpc_order': max_lpc_order,
+            'qlp_coeff_precision': qlp_coeff_precision,
+            'do_qlp_coeff_prec_search': do_qlp_coeff_prec_search,
+            'do_exhaustive_model_search': do_exhaustive_model_search,
+            'min_residual_partition_order': min_residual_partition_order,
+            'max_residual_partition_order': max_residual_partition_order,
+        }
+
         try:
             if not self._fileobj.writable():
                 raise ValueError("file is not writable")
 
             self._encoder = _plibflac.encoder(self._fileobj)
             for name, value in options.items():
-                setattr(self._encoder, name, value)
+                if value is not None:
+                    setattr(self, name, value)
         except BaseException:
             if self._closefile:
                 self._fileobj.close()
