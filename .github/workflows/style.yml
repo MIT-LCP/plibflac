@@ -18,10 +18,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install pycodestyle
+        run: pip install numpydoc pycodestyle
 
       - name: Check Python formatting
         run: python -m pycodestyle .
+
+      - name: Check documentation formatting
+        run: python -m numpydoc lint $(find src -name '*.py')
 
       - name: Check general formatting
         run: |
