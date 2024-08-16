@@ -48,9 +48,11 @@ class TestDecoder(unittest.TestCase):
         """
         Test reading a FLAC file sequentially.
         """
-        with open(self.data_path('100s.flac'), 'rb') as fileobj:
-            decoder = plibflac.Decoder(fileobj)
-            decoder.open()
+        with plibflac.Decoder(self.data_path('100s.flac')) as decoder:
+            self.assertEqual(decoder.channels, 2)
+            self.assertEqual(decoder.sample_rate, 96000)
+            self.assertEqual(decoder.bits_per_sample, 16)
+            self.assertEqual(decoder.total_samples, 650000)
 
             # Samples 0 to 10 (unbuffered)
             samples = decoder.read(10)
@@ -88,8 +90,6 @@ class TestDecoder(unittest.TestCase):
             # End of file
             samples = decoder.read(10)
             self.assertIsNone(samples)
-
-            decoder.close()
 
     def data_path(self, name):
         return os.path.join(os.path.dirname(__file__), 'data', name)
