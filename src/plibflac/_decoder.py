@@ -36,6 +36,7 @@ class Decoder:
 
     def __enter__(self):
         self.open()
+        self.read_metadata()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
