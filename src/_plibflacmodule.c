@@ -1036,11 +1036,14 @@ encoder_write(const FLAC__StreamEncoder *encoder,
     EncoderObject *self = client_data;
     PyObject *bytesobj, *count;
     size_t n;
+    FLAC__StreamEncoderWriteStatus status;
+
+    BEGIN_CALLBACK();
 
     while (bytes > 0) {
         PyErr_CheckSignals();
         if (PyErr_Occurred())
-            return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+            break;
 
         bytesobj = PyBytes_FromStringAndSize((void *) buffer, bytes);
         count = PyObject_CallMethod(self->fileobj, "write", "(O)", bytesobj);
@@ -1048,13 +1051,19 @@ encoder_write(const FLAC__StreamEncoder *encoder,
         Py_XDECREF(bytesobj);
         Py_XDECREF(count);
 
-        if (PyErr_Occurred()) {
-            return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
-        } else {
+        if (PyErr_Occurred())
+            break;
+        else
             bytes -= n;
-        }
     }
-    return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
+
+    if (bytes == 0)
+        status = FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
+    else
+        status = FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+
+    END_CALLBACK();
+    return status;
 }
 
 static FLAC__StreamEncoderSeekStatus
@@ -1064,9 +1073,12 @@ encoder_seek(const FLAC__StreamEncoder *encoder,
 {
     EncoderObject *self = client_data;
     PyObject *dummy;
+    FLAC__StreamEncoderSeekStatus status;
 
     if (!self->seekable)
         return FLAC__STREAM_ENCODER_SEEK_STATUS_UNSUPPORTED;
+
+    BEGIN_CALLBACK();
 
     dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
                                 (unsigned long long) absolute_byte_offset);
@@ -1074,9 +1086,12 @@ encoder_seek(const FLAC__StreamEncoder *encoder,
     Py_XDECREF(dummy);
 
     if (PyErr_Occurred())
-        return FLAC__STREAM_ENCODER_SEEK_STATUS_ERROR;
+        status = FLAC__STREAM_ENCODER_SEEK_STATUS_ERROR;
     else
-        return FLAC__STREAM_ENCODER_SEEK_STATUS_OK;
+        status = FLAC__STREAM_ENCODER_SEEK_STATUS_OK;
+
+    END_CALLBACK();
+    return status;
 }
 
 static FLAC__StreamEncoderTellStatus
@@ -1087,9 +1102,12 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
     EncoderObject *self = client_data;
     PyObject *result;
     FLAC__uint64 pos;
+    FLAC__StreamEncoderSeekStatus status;
 
     if (!self->seekable)
         return FLAC__STREAM_ENCODER_TELL_STATUS_UNSUPPORTED;
+
+    BEGIN_CALLBACK();
 
     result = PyObject_CallMethod(self->fileobj, "tell", "()");
     pos = check_return_uint(result, "tell", "encoder_tell",
@@ -1097,11 +1115,14 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
     Py_XDECREF(result);
 
     if (PyErr_Occurred()) {
-        return FLAC__STREAM_ENCODER_TELL_STATUS_ERROR;
+        status = FLAC__STREAM_ENCODER_TELL_STATUS_ERROR;
     } else {
         *absolute_byte_offset = pos;
-        return FLAC__STREAM_ENCODER_TELL_STATUS_OK;
+        status = FLAC__STREAM_ENCODER_TELL_STATUS_OK;
     }
+
+    END_CALLBACK();
+    return status;
 }
 
 static EncoderObject *
@@ -1195,11 +1216,13 @@ Encoder_open(EncoderObject *self, PyObject *args)
     if (PyErr_Occurred())
         goto done;
 
+    BEGIN_PROCESSING();
     status = FLAC__stream_encoder_init_stream(self->encoder,
                                               &encoder_write,
                                               &encoder_seek,
                                               &encoder_tell,
                                               NULL, self);
+    END_PROCESSING();
 
     if (PyErr_Occurred())
         goto done;
@@ -1229,7 +1252,10 @@ Encoder_close(EncoderObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, ":close"))
         goto done;
 
+
+    BEGIN_PROCESSING();
     ok = FLAC__stream_encoder_finish(self->encoder);
+    END_PROCESSING();
 
     if (PyErr_Occurred())
         goto done;
@@ -1310,9 +1336,11 @@ Encoder_write(EncoderObject *self, PyObject *args)
         Py_CLEAR(arrays[i]);
     }
 
+    BEGIN_PROCESSING();
     ok = FLAC__stream_encoder_process(self->encoder,
                                       (const FLAC__int32 **) data,
                                       nsamples);
+    END_PROCESSING();
 
     if (PyErr_Occurred())
         goto done;
