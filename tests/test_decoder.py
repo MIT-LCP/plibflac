@@ -91,6 +91,26 @@ class TestDecoder(unittest.TestCase):
             samples = decoder.read(10)
             self.assertIsNone(samples)
 
+    def test_read_random(self):
+        """
+        Test reading a FLAC file non-sequentially.
+        """
+        with plibflac.Decoder(self.data_path('100s.flac')) as decoder:
+            decoder.seek(5000)
+            samples_1b = decoder.read(5000)
+
+            with self.assertRaises(plibflac.Error):
+                decoder.seek(2 * decoder.total_samples)
+
+            decoder.seek(0)
+            samples_1a = decoder.read(5000)
+
+        with plibflac.Decoder(self.data_path('100s.flac')) as decoder:
+            samples_2 = decoder.read(10000)
+
+        for s1a, s1b, s2 in zip(samples_1a, samples_1b, samples_2):
+            self.assertEqual(list(s1a) + list(s1b), list(s2))
+
     def data_path(self, name):
         return os.path.join(os.path.dirname(__file__), 'data', name)
 
