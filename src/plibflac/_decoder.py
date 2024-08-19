@@ -156,7 +156,7 @@ class Decoder:
             If the input does not contain a valid FLAC stream.
         """
         self.open()
-        return self._decoder.read_metadata()
+        self._decoder.read_metadata()
 
     def read(self, n_samples):
         """
@@ -215,7 +215,7 @@ class Decoder:
         unspecified.
         """
         self.open()
-        return self._decoder.seek(sample_number)
+        self._decoder.seek(sample_number)
 
     def _prop(name, doc=None):
         def fget(self):

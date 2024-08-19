@@ -233,7 +233,7 @@ class Encoder:
             If an error occurred while encoding the output data.
         """
         self.open()
-        return self._encoder.write(samples)
+        self._encoder.write(samples)
 
     def _prop(name, doc=None):
         def fget(self):
