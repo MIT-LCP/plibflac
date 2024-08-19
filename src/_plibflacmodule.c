@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stddef.h>
 #include <string.h>
 #include <limits.h>
@@ -128,6 +129,32 @@ get_error_type(PyObject *module)
 
 /****************************************************************/
 
+/* Release GIL before calling libFLAC functions */
+#define BEGIN_PROCESSING()                              \
+    do {                                                \
+        assert(self->thread_state == NULL);             \
+        self->thread_state = PyEval_SaveThread();       \
+    } while (0)
+/* Acquire GIL after calling libFLAC functions */
+#define END_PROCESSING()                                \
+    do {                                                \
+        PyEval_RestoreThread(self->thread_state);       \
+        self->thread_state = NULL;                      \
+    } while (0)
+
+/* Acquire GIL before calling Python functions within callback */
+#define BEGIN_CALLBACK()                                \
+    do {                                                \
+        PyEval_RestoreThread(self->thread_state);       \
+        self->thread_state = NULL;                      \
+    } while (0)
+/* Release GIL after calling Python functions within callback */
+#define END_CALLBACK()                                  \
+    do {                                                \
+        assert(self->thread_state == NULL);             \
+        self->thread_state = PyEval_SaveThread();       \
+    } while (0)
+
 /* Simple check to prevent calling decoder/encoder methods from within
    I/O callbacks.
 
@@ -136,8 +163,10 @@ get_error_type(PyObject *module)
 #define BEGIN_NO_RECURSION(method_name)                                 \
     do {                                                                \
         if (recursion_check(&self->busy_method, method_name) == 0) {    \
+            assert(self->thread_state == NULL);                         \
 
 #define END_NO_RECURSION                                                \
+            assert(self->thread_state == NULL);                         \
             self->busy_method = NULL;                                   \
         }                                                               \
     } while (0)
@@ -222,6 +251,7 @@ recursion_check(const char **busy_method, const char *this_method)
 typedef struct {
     PyObject_HEAD
 
+    PyThreadState       *thread_state;
     const char          *busy_method;
     PyObject            *module;
 
@@ -541,6 +571,7 @@ newDecoderObject(PyObject *module, PyObject *fileobj)
     if (self == NULL)
         return NULL;
 
+    self->thread_state = NULL;
     self->busy_method = NULL;
     self->decoder = FLAC__stream_decoder_new();
     self->eof = 0;
@@ -925,6 +956,7 @@ plibflac_decoder(PyObject *self, PyObject *args)
 typedef struct {
     PyObject_HEAD
 
+    PyThreadState       *thread_state;
     const char          *busy_method;
     PyObject            *module;
 
@@ -1029,6 +1061,7 @@ newEncoderObject(PyObject *module, PyObject *fileobj)
     if (self == NULL)
         return NULL;
 
+    self->thread_state = NULL;
     self->busy_method = NULL;
     self->encoder = FLAC__stream_encoder_new();
     self->module = module;
