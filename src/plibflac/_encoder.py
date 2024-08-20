@@ -11,7 +11,7 @@ class Encoder:
                  bits_per_sample=16,
                  sample_rate=44100,
                  total_samples_estimate=None,
-                 compression_level=None,
+                 compression_level=5,
                  streamable_subset=True,
                  verify=False,
                  blocksize=None,
