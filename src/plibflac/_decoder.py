@@ -2,6 +2,8 @@
 Internal functions for reading FLAC streams.
 """
 
+import io
+
 import _plibflac
 
 
@@ -107,7 +109,20 @@ class Decoder:
         has already been opened, this method does nothing.
         """
         if not self._opened:
-            self._decoder.open()
+            try:
+                if isinstance(self._fileobj, io.FileIO):
+                    fd = self._fileobj.fileno()
+                elif (isinstance(self._fileobj, (io.BufferedReader,
+                                                 io.BufferedRandom))
+                      and isinstance(self._fileobj.raw, io.FileIO)
+                      and self._fileobj.seekable()):
+                    fd = self._fileobj.fileno()
+                    self._fileobj.seek(0, io.SEEK_CUR)
+                else:
+                    fd = -1
+            except OSError:
+                fd = -1
+            self._decoder.open(fd)
             self._opened = True
 
     def close(self):
