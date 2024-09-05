@@ -372,15 +372,26 @@ decoder_read_fd(const FLAC__StreamDecoder *decoder,
     Py_ssize_t n;
     int e;
 
-    BEGIN_CALLBACK();
-    PyErr_CheckSignals();
-    e = !!PyErr_Occurred();
-    END_CALLBACK();
+    do {
+        BEGIN_CALLBACK();
+        PyErr_CheckSignals();
+        e = !!PyErr_Occurred();
+        END_CALLBACK();
 
-    if (e)
-        return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
+        if (e)
+            return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
 
-    n = read(self->fd, buffer, *bytes);
+        /* There is, I believe, a bug here: if a signal arrives after
+           the call to PyErr_CheckSignals and before the call to read,
+           then it will not interrupt the read - thus, the process
+           will wait (potentially forever) for the read to complete,
+           before calling the Python signal handler.  This is a
+           fundamental bug that also affects 'os.read' and all other
+           blocking system calls in CPython. */
+
+        n = read(self->fd, buffer, *bytes);
+    } while (n < 0 && errno == EINTR);
+
     if (n == 0) {
         *bytes = 0;
         self->eof = 1;
