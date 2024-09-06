@@ -300,6 +300,7 @@ typedef struct {
     char                 eof;
 
     PyObject            *out_byteobjs[FLAC__MAX_CHANNELS];
+    FLAC__int32         *out_samples[FLAC__MAX_CHANNELS];
     Py_ssize_t           out_count;
     Py_ssize_t           out_remaining;
 
@@ -556,23 +557,31 @@ write_out_samples(DecoderObject  *self,
 {
     Py_ssize_t size;
     unsigned int i;
-    FLAC__int32 *p;
 
     if (self->out_count == 0) {
+        BEGIN_CALLBACK();
+
+        for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
+            Py_CLEAR(self->out_byteobjs[i]);
+            self->out_samples[i] = NULL;
+        }
+
         size = self->out_remaining * sizeof(FLAC__int32);
         for (i = 0; i < channels; i++) {
-            Py_CLEAR(self->out_byteobjs[i]);
             self->out_byteobjs[i] = PyByteArray_FromStringAndSize(NULL, size);
             if (self->out_byteobjs[i] == NULL)
-                return -1;
+                break;
+            self->out_samples[i] =
+                (FLAC__int32 *) PyByteArray_AsString(self->out_byteobjs[i]);
         }
+
+        END_CALLBACK();
     }
 
     for (i = 0; i < channels; i++) {
-        p = (FLAC__int32 *) PyByteArray_AsString(self->out_byteobjs[i]);
-        if (p == NULL)
+        if (self->out_samples[i] == NULL)
             return -1;
-        memcpy(&p[self->out_count],
+        memcpy(&self->out_samples[i][self->out_count],
                &buffer[i][offset],
                count * sizeof(FLAC__int32));
     }
@@ -591,9 +600,6 @@ decoder_write(const FLAC__StreamDecoder *decoder,
     DecoderObject *self = client_data;
     Py_ssize_t blocksize, out_count, buf_count;
     unsigned int channels, i;
-    FLAC__StreamDecoderWriteStatus status;
-
-    BEGIN_CALLBACK();
 
     blocksize = frame->header.blocksize;
     out_count = self->out_remaining;
@@ -610,10 +616,8 @@ decoder_write(const FLAC__StreamDecoder *decoder,
 
     if (out_count > 0) {
         if (write_out_samples(self, (FLAC__int32 **) buffer,
-                              channels, 0, out_count) < 0) {
-            status = FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-            goto done;
-        }
+                              channels, 0, out_count) < 0)
+            return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
         self->out_attr.channels = frame->header.channels;
         self->out_attr.bits_per_sample = frame->header.bits_per_sample;
         self->out_attr.sample_rate = frame->header.sample_rate;
@@ -621,13 +625,15 @@ decoder_write(const FLAC__StreamDecoder *decoder,
 
     if (buf_count > 0) {
         if (self->buf_count > 0) {
+            BEGIN_CALLBACK();
             PyErr_SetString(PyExc_RuntimeError,
                             "decoder_write called multiple times");
-            status = FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-            goto done;
+            END_CALLBACK();
+            return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
         }
 
         if (buf_count > self->buf_size || !self->buf_samples[channels - 1]) {
+            BEGIN_CALLBACK();
             for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
                 PyMem_Free(self->buf_samples[i]);
                 self->buf_samples[i] = NULL;
@@ -637,15 +643,18 @@ decoder_write(const FLAC__StreamDecoder *decoder,
                 self->buf_samples[i] = PyMem_New(FLAC__int32, self->buf_size);
                 if (!self->buf_samples[i]) {
                     PyErr_NoMemory();
-                    status = FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-                    goto done;
+                    break;
                 }
             }
+            END_CALLBACK();
         }
 
-        for (i = 0; i < channels; i++)
+        for (i = 0; i < channels; i++) {
+            if (!self->buf_samples[i])
+                return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
             memcpy(self->buf_samples[i], &buffer[i][out_count],
                    buf_count * sizeof(FLAC__int32));
+        }
 
         self->buf_attr.channels = frame->header.channels;
         self->buf_attr.bits_per_sample = frame->header.bits_per_sample;
@@ -654,10 +663,7 @@ decoder_write(const FLAC__StreamDecoder *decoder,
         self->buf_count = buf_count;
     }
 
-    status = FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
- done:
-    END_CALLBACK();
-    return status;
+    return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 
 static void
@@ -698,6 +704,7 @@ decoder_clear_internal(DecoderObject *self)
 
     for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
         Py_CLEAR(self->out_byteobjs[i]);
+        self->out_samples[i] = NULL;
         PyMem_Free(self->buf_samples[i]);
         self->buf_samples[i] = NULL;
     }
@@ -739,6 +746,7 @@ newDecoderObject(PyObject *module, PyObject *fileobj)
 
     for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
         self->out_byteobjs[i] = NULL;
+        self->out_samples[i] = NULL;
         self->buf_samples[i] = NULL;
     }
 
@@ -903,9 +911,12 @@ Decoder_read(DecoderObject *self, PyObject *args)
     if (out_count > self->buf_count)
         out_count = self->buf_count;
     if (out_count > 0) {
-        if (write_out_samples(self, self->buf_samples,
-                              self->buf_attr.channels,
-                              self->buf_start, out_count) < 0)
+        BEGIN_PROCESSING();
+        ok = (write_out_samples(self, self->buf_samples,
+                                self->buf_attr.channels,
+                                self->buf_start, out_count) >= 0);
+        END_PROCESSING();
+        if (!ok)
             goto fail;
 
         self->out_attr = self->buf_attr;
@@ -970,6 +981,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
     for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
         Py_CLEAR(arrays[i]);
         Py_CLEAR(self->out_byteobjs[i]);
+        self->out_samples[i] = NULL;
     }
 
     self->out_count = 0;
