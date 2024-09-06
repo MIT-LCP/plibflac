@@ -19,6 +19,14 @@
 # define PyBUF_WRITE 0x200
 #endif
 
+/* Added in 3.12 */
+#ifndef Py_mod_multiple_interpreters
+# define Py_mod_multiple_interpreters 3
+#endif
+#ifndef Py_MOD_PER_INTERPRETER_GIL_SUPPORTED
+# define Py_MOD_PER_INTERPRETER_GIL_SUPPORTED ((void *)2)
+#endif
+
 /* Macros added in 3.13 */
 #ifndef Py_BEGIN_CRITICAL_SECTION
 # define Py_BEGIN_CRITICAL_SECTION(obj) {
@@ -114,6 +122,26 @@ MemoryView_FromMem(void *ptr, size_t size)
 #else
     return PyMemoryView_FromMemory(ptr, size, PyBUF_WRITE);
 #endif
+}
+
+static unsigned long
+get_python_version(void)
+{
+    PyObject *version_info, *major = NULL, *minor = NULL;
+    long major_n, minor_n;
+
+    version_info = PySys_GetObject("version_info");
+    if (version_info != NULL) {
+        major = PySequence_GetItem(version_info, 0);
+        minor = PySequence_GetItem(version_info, 1);
+    }
+    major_n = major ? PyLong_AsLong(major) : -1;
+    minor_n = minor ? PyLong_AsLong(minor) : -1;
+    Py_CLEAR(major);
+    Py_CLEAR(minor);
+    if (major_n < 0 || minor_n < 0)
+        return 0;
+    return ((major_n << 24) + (minor_n << 16));
 }
 
 /****************************************************************/
@@ -1661,13 +1689,7 @@ plibflac_free(void *m)
     }
 }
 
-static struct PyModuleDef_Slot plibflac_slots[] = {
-    {Py_mod_exec, plibflac_exec},
-#ifdef Py_GIL_DISABLED
-    {Py_mod_gil, Py_MOD_GIL_NOT_USED},
-#endif
-    {0, NULL},
-};
+static struct PyModuleDef_Slot plibflac_slots[4];
 
 static struct PyModuleDef plibflacmodule = {
     PyModuleDef_HEAD_INIT,
@@ -1687,5 +1709,24 @@ __attribute__((visibility("default")))
 PyMODINIT_FUNC
 PyInit__plibflac(void)
 {
+    unsigned long version = get_python_version();
+    int s = 0;
+
+    plibflac_slots[s].slot = Py_mod_exec;
+    plibflac_slots[s].value = plibflac_exec;
+    s++;
+    if (version >= 0x030c0000) {
+        plibflac_slots[s].slot = Py_mod_multiple_interpreters;
+        plibflac_slots[s].value = Py_MOD_PER_INTERPRETER_GIL_SUPPORTED;
+        s++;
+    }
+#ifdef Py_GIL_DISABLED
+    plibflac_slots[s].slot = Py_mod_gil;
+    plibflac_slots[s].value = Py_MOD_GIL_NOT_USED;
+    s++;
+#endif
+    plibflac_slots[s].slot = 0;
+    plibflac_slots[s].value = NULL;
+
     return PyModuleDef_Init(&plibflacmodule);
 }
