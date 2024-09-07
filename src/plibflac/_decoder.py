@@ -47,12 +47,14 @@ class Decoder:
             self._opened = True
 
     def close(self):
-        if self._opened:
-            self._decoder.close()
-            self._opened = False
-        if self._closefile:
-            self._fileobj.close()
-            self._closefile = False
+        try:
+            if self._opened:
+                self._opened = False
+                self._decoder.close()
+        finally:
+            if self._closefile:
+                self._closefile = False
+                self._fileobj.close()
 
     def read_metadata(self):
         self.open()

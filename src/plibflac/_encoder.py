@@ -85,12 +85,14 @@ class Encoder:
             self._opened = True
 
     def close(self):
-        if self._opened:
-            self._encoder.close()
-            self._opened = False
-        if self._closefile:
-            self._fileobj.close()
-            self._closefile = False
+        try:
+            if self._opened:
+                self._opened = False
+                self._encoder.close()
+        finally:
+            if self._closefile:
+                self._closefile = False
+                self._fileobj.close()
 
     def write(self, samples):
         self.open()
