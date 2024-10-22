@@ -9,6 +9,14 @@
 #include <FLAC/stream_decoder.h>
 #include <FLAC/stream_encoder.h>
 
+#ifdef _WIN32
+# include <io.h>
+# undef lseek
+# undef off_t
+# define lseek _lseeki64
+# define off_t __int64
+#endif
+
 /* PyBUF_READ and PyBUF_WRITE were not formally added to the limited
    API until 3.11, but PyMemoryView_FromMemory is stable since 3.3
    (https://github.com/python/cpython/issues/98680) */
