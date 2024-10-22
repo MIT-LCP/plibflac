@@ -35,6 +35,8 @@
 
 /****************************************************************/
 
+#define OFF_MAX ((((off_t) 1 << (sizeof(off_t) * CHAR_BIT - 2)) - 1) * 2 + 1)
+
 #if INT_MAX == 0x7fffffff
 # define INT32_FORMAT "i"
 #elif LONG_MAX == 0x7fffffff
@@ -455,16 +457,18 @@ decoder_seek_fd(const FLAC__StreamDecoder *decoder,
     if (!self->seekable)
         return FLAC__STREAM_DECODER_SEEK_STATUS_UNSUPPORTED;
 
-    if (lseek(self->fd, absolute_byte_offset, SEEK_SET) >= 0) {
-        return FLAC__STREAM_DECODER_SEEK_STATUS_OK;
+    if (absolute_byte_offset > (FLAC__uint64) OFF_MAX) {
+        errno = EOVERFLOW;
     } else {
-        e = errno;
-        BEGIN_CALLBACK();
-        errno = e;
-        PyErr_SetFromErrno(PyExc_OSError);
-        END_CALLBACK();
-        return FLAC__STREAM_DECODER_SEEK_STATUS_ERROR;
+        if (lseek(self->fd, absolute_byte_offset, SEEK_SET) >= 0)
+            return FLAC__STREAM_DECODER_SEEK_STATUS_OK;
     }
+    e = errno;
+    BEGIN_CALLBACK();
+    errno = e;
+    PyErr_SetFromErrno(PyExc_OSError);
+    END_CALLBACK();
+    return FLAC__STREAM_DECODER_SEEK_STATUS_ERROR;
 }
 
 static FLAC__StreamDecoderTellStatus
