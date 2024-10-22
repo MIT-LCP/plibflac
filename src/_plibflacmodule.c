@@ -502,6 +502,31 @@ decoder_tell(const FLAC__StreamDecoder *decoder,
     return status;
 }
 
+static FLAC__StreamDecoderTellStatus
+decoder_tell_fd(const FLAC__StreamDecoder *decoder,
+                FLAC__uint64              *absolute_byte_offset,
+                void                      *client_data)
+{
+    DecoderObject *self = client_data;
+    off_t pos;
+    int e;
+
+    if (!self->seekable)
+        return FLAC__STREAM_DECODER_TELL_STATUS_UNSUPPORTED;
+
+    pos = lseek(self->fd, (off_t) 0, SEEK_CUR);
+    if (pos >= 0) {
+        *absolute_byte_offset = (FLAC__uint64) pos;
+        return FLAC__STREAM_DECODER_TELL_STATUS_OK;
+    }
+    e = errno;
+    BEGIN_CALLBACK();
+    errno = e;
+    PyErr_SetFromErrno(PyExc_OSError);
+    END_CALLBACK();
+    return FLAC__STREAM_DECODER_TELL_STATUS_ERROR;
+}
+
 static FLAC__StreamDecoderLengthStatus
 decoder_length(const FLAC__StreamDecoder *decoder,
                FLAC__uint64              *stream_length,
@@ -830,7 +855,7 @@ Decoder_open(DecoderObject *self, PyObject *args)
         status = FLAC__stream_decoder_init_stream(self->decoder,
                                                   &decoder_read_fd,
                                                   &decoder_seek_fd,
-                                                  &decoder_tell,
+                                                  &decoder_tell_fd,
                                                   &decoder_length,
                                                   &decoder_eof,
                                                   &decoder_write,
