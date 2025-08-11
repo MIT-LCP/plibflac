@@ -65,7 +65,9 @@
 //#cmakedefine HAVE_CLOCK_GETTIME
 
 /* Define to 1 if you have the <cpuid.h> header file. */
-//#cmakedefine HAVE_CPUID_H
+#ifdef PLIBFLAC_HAVE_CPUID_H
+# define HAVE_CPUID_H 1
+#endif
 
 /* Define to 1 if fseeko (and presumably ftello) exists and is declared. */
 #ifdef PLIBFLAC_HAVE_FSEEKO

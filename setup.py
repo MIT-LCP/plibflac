@@ -110,6 +110,30 @@ def _flac_options(compiler, build_temp):
 
     if try_compile('conftest_fseeko.c'):
         define_macros += [('PLIBFLAC_HAVE_FSEEKO', '1')]
+    if try_compile('conftest_cpuid_h.c'):
+        define_macros += [('PLIBFLAC_HAVE_CPUID_H', '1')]
+
+    machine = platform.machine().lower()
+    if re.match('i[3-6]86', machine):
+        define_macros += [('FLAC__CPU_IA32', '1'),
+                          ('FLAC__USE_AVX', '1'),
+                          ('FLAC__ALIGN_MALLOC_DATA', '1')]
+        if try_compile('conftest_x86intrin.c'):
+            define_macros += [('FLAC__HAS_X86INTRIN', '1')]
+    if re.match('x86_64|amd64', machine):
+        define_macros += [('FLAC__CPU_X86_64', '1'),
+                          ('FLAC__HAS_X86INTRIN', '1'),
+                          ('FLAC__USE_AVX', '1'),
+                          ('FLAC__ALIGN_MALLOC_DATA', '1')]
+        if try_compile('conftest_x86intrin.c'):
+            define_macros += [('FLAC__HAS_X86INTRIN', '1')]
+    if re.match('arm64|aarch64', machine):
+        define_macros += [('FLAC__CPU_ARM64', '1')]
+        if try_compile('conftest_a64neonintrin.c'):
+            define_macros += [('FLAC__HAS_NEONINTRIN', '1'),
+                              ('FLAC__HAS_A64NEONINTRIN', '1')]
+        if try_compile('conftest_neonintrin.c'):
+            define_macros += [('FLAC__HAS_NEONINTRIN', '1')]
 
     return {
         'sources': sources,
