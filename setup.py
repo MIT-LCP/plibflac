@@ -103,10 +103,9 @@ def _flac_options(compiler, build_temp):
 
     # On most *nix platforms, we must use -fvisibility=hidden to
     # prevent the internal libFLAC from conflicting with any shared
-    # libraries.  This shouldn't be necessary for Windows, and may not
-    # be supported by Windows compilers.
+    # libraries.
     extra_compile_args = []
-    if os.name != 'nt':
+    if try_compile('conftest.c', ['-fvisibility=hidden']):
         extra_compile_args += ['-fvisibility=hidden']
 
     return {
