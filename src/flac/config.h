@@ -68,7 +68,9 @@
 //#cmakedefine HAVE_CPUID_H
 
 /* Define to 1 if fseeko (and presumably ftello) exists and is declared. */
-#define HAVE_FSEEKO 1
+#ifdef PLIBFLAC_HAVE_FSEEKO
+# define HAVE_FSEEKO 1
+#endif
 
 /* Define to 1 if you have the `getopt_long' function. */
 //#cmakedefine HAVE_GETOPT_LONG

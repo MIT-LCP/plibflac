@@ -108,6 +108,9 @@ def _flac_options(compiler, build_temp):
     if try_compile('conftest.c', ['-fvisibility=hidden']):
         extra_compile_args += ['-fvisibility=hidden']
 
+    if try_compile('conftest_fseeko.c'):
+        define_macros += [('PLIBFLAC_HAVE_FSEEKO', '1')]
+
     return {
         'sources': sources,
         'include_dirs': include_dirs,
