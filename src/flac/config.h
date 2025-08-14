@@ -93,7 +93,9 @@
 //#cmakedefine HAVE_MEMORY_H
 
 /* Define if multithreading is enabled */
-//#cmakedefine HAVE_PTHREAD 1
+#ifdef PLIBFLAC_HAVE_PTHREAD
+# define HAVE_PTHREAD 1
+#endif
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1

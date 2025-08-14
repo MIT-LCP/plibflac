@@ -112,6 +112,8 @@ def _flac_options(compiler, build_temp):
         define_macros += [('PLIBFLAC_HAVE_FSEEKO', '1')]
     if try_compile('conftest_cpuid_h.c'):
         define_macros += [('PLIBFLAC_HAVE_CPUID_H', '1')]
+    if try_compile('conftest_pthread.c'):
+        define_macros += [('PLIBFLAC_HAVE_PTHREAD', '1')]
 
     machine = platform.machine().lower()
     if re.match('i[3-6]86', machine):
