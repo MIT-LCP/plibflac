@@ -1672,6 +1672,55 @@ Encoder_apodization_setter(EncoderObject *self, PyObject *value,
     return 0;
 }
 
+static PyObject *
+Encoder_num_threads_getter(EncoderObject *self, void *closure)
+{
+    unsigned long value = 1;
+#if FLAC_API_VERSION_CURRENT >= 14
+    Py_BEGIN_CRITICAL_SECTION(self);
+    value = FLAC__stream_encoder_get_num_threads(self->encoder);
+    Py_END_CRITICAL_SECTION();
+#endif
+    return PyLong_FromUnsignedLong(value);
+}
+
+static int
+Encoder_num_threads_setter(EncoderObject *self, PyObject *value,
+                           void *closure)
+{
+    uint32_t n;
+    if (!value) {
+        PyErr_Format(PyExc_AttributeError,
+                     "cannot delete attribute 'num_threads'");
+        return -1;
+    }
+    if (!PyLong_Check(value)) {
+        PyErr_Format(PyExc_TypeError,
+                     "invalid type for attribute 'num_threads'");
+        return -1;
+    }
+    n = Long_AsUint32(value);
+    if (PyErr_Occurred())
+        return -1;
+#if FLAC_API_VERSION_CURRENT >= 14
+    BEGIN_NO_RECURSION(".num_threads");
+    if (FLAC__stream_encoder_set_num_threads(self->encoder, n) ==
+        FLAC__STREAM_ENCODER_SET_NUM_THREADS_TOO_MANY_THREADS) {
+
+        /* Exceeded libFLAC's internal limit, but we don't know what
+           the limit is.  Try to set the value as high as we can. */
+        uint32_t i = 1;
+        while (FLAC__stream_encoder_set_num_threads(self->encoder, i) ==
+               FLAC__STREAM_ENCODER_SET_NUM_THREADS_OK)
+            i++;
+    }
+    END_NO_RECURSION;
+#else
+    (void) n;
+#endif
+    return 0;
+}
+
 static PyGetSetDef Encoder_properties[] = {
     PROPERTY_DEF_RW(Encoder, channels),
     PROPERTY_DEF_RW(Encoder, bits_per_sample),
@@ -1690,6 +1739,7 @@ static PyGetSetDef Encoder_properties[] = {
     PROPERTY_DEF_RW(Encoder, do_exhaustive_model_search),
     PROPERTY_DEF_RW(Encoder, min_residual_partition_order),
     PROPERTY_DEF_RW(Encoder, max_residual_partition_order),
+    PROPERTY_DEF_RW(Encoder, num_threads),
     {NULL}
 };
 
