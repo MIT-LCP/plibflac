@@ -72,6 +72,8 @@ class Encoder:
         The minimum partition order for subdividing residual blocks.
     max_residual_partition_order : int, optional
         The maximum partition order for subdividing residual blocks.
+    num_threads : int, optional
+        The maximum number of threads to use for encoding.
 
     Notes
     -----
@@ -101,7 +103,8 @@ class Encoder:
                  do_qlp_coeff_prec_search=None,
                  do_exhaustive_model_search=None,
                  min_residual_partition_order=None,
-                 max_residual_partition_order=None):
+                 max_residual_partition_order=None,
+                 num_threads=None):
         if isinstance(file, (str, bytes)) or hasattr(file, '__fspath__'):
             self._fileobj = open(file, 'wb')
             self._closefile = True
@@ -135,6 +138,7 @@ class Encoder:
             'do_exhaustive_model_search': do_exhaustive_model_search,
             'min_residual_partition_order': min_residual_partition_order,
             'max_residual_partition_order': max_residual_partition_order,
+            'num_threads': num_threads,
         }
 
         try:
@@ -437,6 +441,19 @@ class Encoder:
 
         Together with `min_residual_partition_order`, this corresponds
         to the ``-r`` option for the ``flac`` command-line tool.
+
+        This attribute must be set before opening the stream.
+        """
+    )
+    num_threads = _prop(
+        'num_threads',
+        """
+        Maximum number of threads to use for encoding.
+
+        This attribute sets an upper limit on the number of CPU cores
+        that may be used; the encoder may or may not use them.
+        Depending on the platform, this attribute may have no effect.
+        The default value is 1.
 
         This attribute must be set before opening the stream.
         """
