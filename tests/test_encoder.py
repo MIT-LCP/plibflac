@@ -6,6 +6,7 @@ Test cases for encoding using plibflac.
 
 import array
 import io
+import os
 import random
 import unittest
 
@@ -80,6 +81,23 @@ class TestEncoder(unittest.TestCase):
         self.assertIsNone(data)
 
         decoder.close()
+
+    def test_write_multithread(self):
+        """
+        Test encoding some example data using multiple threads.
+        """
+        with plibflac.Decoder(self.data_path('100s.flac')) as decoder:
+            channels = decoder.channels
+            bits_per_sample = decoder.bits_per_sample
+            data = decoder.read(decoder.total_samples)
+
+        with plibflac.Encoder(os.devnull, channels=channels,
+                              bits_per_sample=bits_per_sample,
+                              num_threads=10) as encoder:
+            encoder.write(data)
+
+    def data_path(self, name):
+        return os.path.join(os.path.dirname(__file__), 'data', name)
 
 
 if __name__ == '__main__':
