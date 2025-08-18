@@ -90,7 +90,7 @@ jobs:
 
       - name: Run test suite with assertions
         run: |
-          env PYTHONMALLOC=debug \
+          env PYTHONDEVMODE=1 \
               UBSAN_OPTIONS=halt_on_error=1 \
             python -m pytest --verbose --capture=no tests
 
