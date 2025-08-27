@@ -941,7 +941,7 @@ static PyObject *
 Decoder_read(DecoderObject *self, PyObject *args)
 {
     Py_ssize_t limit;
-    FLAC__bool ok;
+    FLAC__bool ok = 1;
     FLAC__StreamDecoderState state;
     PyObject *memview, *arrays[FLAC__MAX_CHANNELS] = {0}, *result = NULL;
     Py_ssize_t out_count, new_size;
@@ -970,30 +970,33 @@ Decoder_read(DecoderObject *self, PyObject *args)
         self->buf_count -= out_count;
     }
 
-    while (self->out_remaining > 0 && self->buf_count == 0) {
-        BEGIN_PROCESSING();
+    BEGIN_PROCESSING();
 
+    while (self->out_remaining > 0 && self->buf_count == 0) {
         ok = FLAC__stream_decoder_process_single(self->decoder);
 
         state = FLAC__stream_decoder_get_state(self->decoder);
         if (state == FLAC__STREAM_DECODER_ABORTED)
             FLAC__stream_decoder_flush(self->decoder);
 
-        END_PROCESSING();
-
-        if (PyErr_Occurred())
-            goto fail;
-
         if ((state == FLAC__STREAM_DECODER_END_OF_STREAM ||
-             state == FLAC__STREAM_DECODER_ABORTED))
+             state == FLAC__STREAM_DECODER_ABORTED ||
+             !ok))
             break;
+    }
 
-        if (!ok) {
-            PyErr_Format(get_error_type(self->module),
-                         "process_single failed (state = %s)",
-                         FLAC__StreamDecoderStateString[state]);
-            goto fail;
-        }
+    END_PROCESSING();
+
+    if (PyErr_Occurred())
+        goto fail;
+
+    if ((state != FLAC__STREAM_DECODER_END_OF_STREAM &&
+         state != FLAC__STREAM_DECODER_ABORTED &&
+         !ok)) {
+        PyErr_Format(get_error_type(self->module),
+                     "process_single failed (state = %s)",
+                     FLAC__StreamDecoderStateString[state]);
+        goto fail;
     }
 
     if (self->out_count == 0) {
