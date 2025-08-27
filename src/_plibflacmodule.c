@@ -415,7 +415,8 @@ decoder_read_fd(const FLAC__StreamDecoder *decoder,
         } else {
             BEGIN_CALLBACK();
             errno = e;
-            PyErr_SetFromErrno(PyExc_OSError);
+            if (!PyErr_Occurred())
+                PyErr_SetFromErrno(PyExc_OSError);
             END_CALLBACK();
             return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
         }
@@ -431,7 +432,7 @@ decoder_seek(const FLAC__StreamDecoder *decoder,
              void                      *client_data)
 {
     DecoderObject *self = client_data;
-    PyObject *dummy;
+    PyObject *dummy = NULL;
     FLAC__StreamDecoderSeekStatus status;
 
     if (!self->seekable)
@@ -439,9 +440,11 @@ decoder_seek(const FLAC__StreamDecoder *decoder,
 
     BEGIN_CALLBACK();
 
-    self->eof = 0;
-    dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
-                                (unsigned long long) absolute_byte_offset);
+    if (!PyErr_Occurred()) {
+        self->eof = 0;
+        dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
+                                    (unsigned long long) absolute_byte_offset);
+    }
     check_return_uint(dummy, "seek", "decoder_seek", (FLAC__uint64) -1);
     Py_XDECREF(dummy);
 
@@ -474,7 +477,8 @@ decoder_seek_fd(const FLAC__StreamDecoder *decoder,
     e = errno;
     BEGIN_CALLBACK();
     errno = e;
-    PyErr_SetFromErrno(PyExc_OSError);
+    if (!PyErr_Occurred())
+        PyErr_SetFromErrno(PyExc_OSError);
     END_CALLBACK();
     return FLAC__STREAM_DECODER_SEEK_STATUS_ERROR;
 }
@@ -485,7 +489,7 @@ decoder_tell(const FLAC__StreamDecoder *decoder,
              void                      *client_data)
 {
     DecoderObject *self = client_data;
-    PyObject *result;
+    PyObject *result = NULL;
     FLAC__uint64 pos;
     FLAC__StreamDecoderTellStatus status;
 
@@ -494,7 +498,8 @@ decoder_tell(const FLAC__StreamDecoder *decoder,
 
     BEGIN_CALLBACK();
 
-    result = PyObject_CallMethod(self->fileobj, "tell", "()");
+    if (!PyErr_Occurred())
+        result = PyObject_CallMethod(self->fileobj, "tell", "()");
     pos = check_return_uint(result, "tell", "decoder_tell",
                             (FLAC__uint64) -1);
     Py_XDECREF(result);
@@ -529,8 +534,10 @@ decoder_tell_fd(const FLAC__StreamDecoder *decoder,
     }
     e = errno;
     BEGIN_CALLBACK();
-    errno = e;
-    PyErr_SetFromErrno(PyExc_OSError);
+    if (!PyErr_Occurred()) {
+        errno = e;
+        PyErr_SetFromErrno(PyExc_OSError);
+    }
     END_CALLBACK();
     return FLAC__STREAM_DECODER_TELL_STATUS_ERROR;
 }
@@ -550,7 +557,8 @@ decoder_length(const FLAC__StreamDecoder *decoder,
 
     BEGIN_CALLBACK();
 
-    oldpos = PyObject_CallMethod(self->fileobj, "tell", "()");
+    if (!PyErr_Occurred())
+        oldpos = PyObject_CallMethod(self->fileobj, "tell", "()");
     check_return_uint(oldpos, "tell", "decoder_length", (FLAC__uint64) -1);
 
     if (oldpos != NULL)
@@ -663,8 +671,9 @@ decoder_write(const FLAC__StreamDecoder *decoder,
     if (buf_count > 0) {
         if (self->buf_count > 0) {
             BEGIN_CALLBACK();
-            PyErr_SetString(PyExc_RuntimeError,
-                            "decoder_write called multiple times");
+            if (!PyErr_Occurred())
+                PyErr_SetString(PyExc_RuntimeError,
+                                "decoder_write called multiple times");
             END_CALLBACK();
             return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
         }
@@ -1253,7 +1262,7 @@ encoder_seek(const FLAC__StreamEncoder *encoder,
              void                      *client_data)
 {
     EncoderObject *self = client_data;
-    PyObject *dummy;
+    PyObject *dummy = NULL;
     FLAC__StreamEncoderSeekStatus status;
 
     if (!self->seekable)
@@ -1261,8 +1270,9 @@ encoder_seek(const FLAC__StreamEncoder *encoder,
 
     BEGIN_CALLBACK();
 
-    dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
-                                (unsigned long long) absolute_byte_offset);
+    if (!PyErr_Occurred())
+        dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
+                                    (unsigned long long) absolute_byte_offset);
     check_return_uint(dummy, "seek", "encoder_seek", (FLAC__uint64) -1);
     Py_XDECREF(dummy);
 
@@ -1281,7 +1291,7 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
              void                      *client_data)
 {
     EncoderObject *self = client_data;
-    PyObject *result;
+    PyObject *result = NULL;
     FLAC__uint64 pos;
     FLAC__StreamEncoderSeekStatus status;
 
@@ -1290,7 +1300,8 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
 
     BEGIN_CALLBACK();
 
-    result = PyObject_CallMethod(self->fileobj, "tell", "()");
+    if (!PyErr_Occurred())
+        result = PyObject_CallMethod(self->fileobj, "tell", "()");
     pos = check_return_uint(result, "tell", "encoder_tell",
                             (FLAC__uint64) -1);
     Py_XDECREF(result);
