@@ -43,7 +43,9 @@
 
 /****************************************************************/
 
-#define OFF_MAX ((((off_t) 1 << (sizeof(off_t) * CHAR_BIT - 2)) - 1) * 2 + 1)
+#ifndef OFF_MAX
+# define OFF_MAX ((((off_t) 1 << (sizeof(off_t) * CHAR_BIT - 2)) - 1) * 2 + 1)
+#endif
 
 #if INT_MAX == 0x7fffffff
 # define INT32_FORMAT "i"
