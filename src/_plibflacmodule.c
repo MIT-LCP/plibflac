@@ -1298,7 +1298,7 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
     EncoderObject *self = client_data;
     PyObject *result = NULL;
     FLAC__uint64 pos;
-    FLAC__StreamEncoderSeekStatus status;
+    FLAC__StreamEncoderTellStatus status;
 
     if (!self->seekable)
         return FLAC__STREAM_ENCODER_TELL_STATUS_UNSUPPORTED;
