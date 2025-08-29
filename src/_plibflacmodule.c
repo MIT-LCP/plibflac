@@ -942,7 +942,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
 {
     Py_ssize_t limit;
     FLAC__bool ok = 1;
-    FLAC__StreamDecoderState state;
+    FLAC__StreamDecoderState state = FLAC__STREAM_DECODER_END_OF_STREAM;
     PyObject *memview, *arrays[FLAC__MAX_CHANNELS] = {0}, *result = NULL;
     Py_ssize_t out_count, new_size;
     unsigned int i;
