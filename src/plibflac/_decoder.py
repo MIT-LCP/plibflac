@@ -139,7 +139,7 @@ class Decoder:
 
         Raises
         ------
-        plibflac.error
+        plibflac.Error
             If the `md5_checking` property was set to True, and the
             input file appears corrupted.
         """
@@ -167,7 +167,7 @@ class Decoder:
 
         Raises
         ------
-        plibflac.error
+        plibflac.Error
             If the input does not contain a valid FLAC stream.
         """
         self.open()
@@ -199,7 +199,7 @@ class Decoder:
 
         Raises
         ------
-        plibflac.error
+        plibflac.Error
             If the input stream is invalid and cannot be decoded.
         """
         self.open()
@@ -219,7 +219,7 @@ class Decoder:
 
         Raises
         ------
-        plibflac.error
+        plibflac.Error
             If the input file is not seekable, or the given sample
             number is beyond the end of the file, or if the input
             stream is invalid and cannot be decoded.

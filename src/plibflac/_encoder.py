@@ -173,7 +173,7 @@ class Encoder:
 
         Raises
         ------
-        plibflac.error
+        plibflac.Error
             If the encoder properties are invalid or inconsistent.
         """
         if not self._opened:
@@ -198,7 +198,7 @@ class Encoder:
 
         Raises
         ------
-        plibflac.error
+        plibflac.Error
             If an error occurred while encoding the remaining output
             data.
         """
@@ -233,7 +233,7 @@ class Encoder:
 
         Raises
         ------
-        plibflac.error
+        plibflac.Error
             If an error occurred while encoding the output data.
         """
         self.open()
