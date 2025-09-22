@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stddef.h>
 #include <string.h>
 #include <limits.h>
@@ -15,6 +16,9 @@
 # undef off_t
 # define lseek _lseeki64
 # define off_t __int64
+#else
+# include <sys/types.h>
+# include <unistd.h>
 #endif
 
 /* PyBUF_READ and PyBUF_WRITE were not formally added to the limited
