@@ -64,6 +64,22 @@ class TestDecoder(unittest.TestCase):
         with plibflac.Decoder(memfileobj) as decoder:
             self._test_read_sequential(decoder)
 
+    def test_read_with_errors(self):
+        """
+        Test the handling of non-fatal bitstream errors.
+        """
+        with open(self.data_path('100s.flac'), 'rb') as fileobj:
+            memfileobj = io.BytesIO(b'*' + fileobj.read())
+
+        with plibflac.Decoder(memfileobj, errors='ignore') as decoder:
+            self._test_read_sequential(decoder)
+
+        memfileobj.seek(0)
+
+        with self.assertRaises(plibflac.Error):
+            with plibflac.Decoder(memfileobj, errors='strict') as decoder:
+                pass
+
     def test_read_pipe(self):
         """
         Test reading from a pipe.
