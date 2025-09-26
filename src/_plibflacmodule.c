@@ -311,6 +311,7 @@ typedef struct {
 
     PyObject            *fileobj;
     FLAC__StreamDecoder *decoder;
+    PyObject            *error_callback;
     int                  fd;
     char                 seekable;
     char                 eof;
@@ -747,6 +748,20 @@ decoder_error(const FLAC__StreamDecoder      *decoder,
               FLAC__StreamDecoderErrorStatus  status,
               void                           *client_data)
 {
+    DecoderObject *self = client_data;
+    const char *msg = FLAC__StreamDecoderErrorStatusString[status];
+    PyObject *result;
+
+    BEGIN_CALLBACK();
+
+    if (!PyErr_Occurred()) {
+        if (self->error_callback && self->error_callback != Py_None) {
+            result = PyObject_CallFunction(self->error_callback, "s", msg);
+            Py_XDECREF(result);
+        }
+    }
+
+    END_CALLBACK();
 }
 
 static void
@@ -793,6 +808,7 @@ newDecoderObject(PyObject *module, PyObject *fileobj)
     Py_XINCREF(self->module);
     self->fileobj = fileobj;
     Py_XINCREF(self->fileobj);
+    self->error_callback = NULL;
 
     PyObject_GC_Track((PyObject *) self);
 
@@ -816,20 +832,18 @@ newDecoderObject(PyObject *module, PyObject *fileobj)
 static int
 Decoder_traverse(DecoderObject *self, visitproc visit, void *arg)
 {
-    Py_BEGIN_CRITICAL_SECTION(self);
     Py_VISIT(self->module);
     Py_VISIT(self->fileobj);
-    Py_END_CRITICAL_SECTION();
+    Py_VISIT(self->error_callback);
     return 0;
 }
 
 static int
 Decoder_clear(DecoderObject *self)
 {
-    Py_BEGIN_CRITICAL_SECTION(self);
     Py_CLEAR(self->module);
     Py_CLEAR(self->fileobj);
-    Py_END_CRITICAL_SECTION();
+    Py_CLEAR(self->error_callback);
     return 0;
 }
 
@@ -842,6 +856,7 @@ Decoder_dealloc(DecoderObject *self)
 
     Py_CLEAR(self->module);
     Py_CLEAR(self->fileobj);
+    Py_CLEAR(self->error_callback);
 
     if (self->decoder)
         FLAC__stream_decoder_delete(self->decoder);
@@ -1164,6 +1179,9 @@ static PyMemberDef Decoder_members[] = {
     {"sample_rate", T_ULONG,
      offsetof(DecoderObject, out_attr.sample_rate),
      READONLY},
+    {"error_callback", T_OBJECT_EX,
+     offsetof(DecoderObject, error_callback),
+     0},
     {NULL}
 };
 
