@@ -3,8 +3,19 @@ Internal functions for reading FLAC streams.
 """
 
 import io
+import logging
 
 import _plibflac
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _log_stream_error(message):
+    _LOGGER.warning("error in FLAC stream: %s", message)
+
+
+def _raise_stream_error(message):
+    raise _plibflac.Error(message)
 
 
 class Decoder:
@@ -22,6 +33,9 @@ class Decoder:
     file : path-like object or binary file object
         Either the name of the input file, or an existing file object
         (which must be a readable binary file).
+    errors : str, optional
+        Error handling mode; may be set to ``'strict'``, ``'warn'``,
+        or ``'ignore'``.
     md5_checking : bool, optional
         Whether to verify the stream's MD5 hash if possible.  If
         `md5_checking` is set to True, then `close` will raise an
@@ -65,7 +79,10 @@ class Decoder:
     `read`, or `read_metadata` for the first time.
     """
 
-    def __init__(self, file, *, md5_checking=False):
+    def __init__(self, file, *, errors='strict', md5_checking=False):
+        if errors not in ('strict', 'warn', 'ignore'):
+            raise ValueError("errors must be 'strict', 'warn', or 'ignore'")
+
         if isinstance(file, (str, bytes)) or hasattr(file, '__fspath__'):
             self._fileobj = open(file, 'rb')
             self._closefile = True
@@ -86,6 +103,10 @@ class Decoder:
                 raise ValueError("file is not readable")
 
             self._decoder = _plibflac.decoder(self._fileobj)
+            if errors == 'strict':
+                self._decoder.error_callback = _raise_stream_error
+            elif errors == 'warn':
+                self._decoder.error_callback = _log_stream_error
             self.md5_checking = md5_checking
         except BaseException:
             if self._closefile:
