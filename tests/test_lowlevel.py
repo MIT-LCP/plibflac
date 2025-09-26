@@ -57,6 +57,24 @@ class TestGC(unittest.TestCase):
         gc.collect()
         self.assertIsNone(fileobj_ref())
 
+    def test_decoder_circular_callback(self):
+        """
+        Test decoder memory management using garbage collection.
+
+        This test creates a decoder object that points to an error
+        callback, which itself holds a reference back to the decoder.
+        Upon deleting the variables, both objects will still be alive
+        (since they hold references to each other.)  Upon invoking the
+        garbage collector, the objects should be freed.
+        """
+        decoder = _plibflac.decoder(os.devnull)
+        decoder.error_callback = lambda x=decoder: x
+        callback_ref = weakref.ref(decoder.error_callback)
+        del decoder
+        self.assertIsNotNone(callback_ref())
+        gc.collect()
+        self.assertIsNone(callback_ref())
+
     def test_encoder_simple(self):
         """
         Test encoder memory management using reference counting.
