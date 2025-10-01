@@ -158,6 +158,29 @@ class TestDecoder(unittest.TestCase):
         for s1a, s1b, s2 in zip(samples_1a, samples_1b, samples_2):
             self.assertEqual(list(s1a) + list(s1b), list(s2))
 
+    def test_read_random_bytesio(self):
+        """
+        Test reading from a BytesIO object non-sequentially.
+        """
+        with open(self.data_path('100s.flac'), 'rb') as fileobj:
+            memfileobj = io.BytesIO(fileobj.read())
+
+        with plibflac.Decoder(memfileobj) as decoder:
+            decoder.seek(5000)
+            samples_1b = decoder.read(5000)
+
+            with self.assertRaises(plibflac.Error):
+                decoder.seek(2 * decoder.total_samples)
+
+            decoder.seek(0)
+            samples_1a = decoder.read(5000)
+
+        with plibflac.Decoder(self.data_path('100s.flac')) as decoder:
+            samples_2 = decoder.read(10000)
+
+        for s1a, s1b, s2 in zip(samples_1a, samples_1b, samples_2):
+            self.assertEqual(list(s1a) + list(s1b), list(s2))
+
     def test_properties(self):
         """
         Test setting decoder properties.
