@@ -180,47 +180,54 @@ get_error_type(PyObject *module)
 /****************************************************************/
 
 /* Release GIL before calling libFLAC functions */
-#define BEGIN_PROCESSING()                              \
+#define BEGIN_PROCESSING(obj)                           \
     do {                                                \
-        assert(self->thread_state == NULL);             \
-        self->thread_state = PyEval_SaveThread();       \
+        assert(obj->thread_state == NULL);              \
+        obj->thread_state = PyEval_SaveThread();        \
     } while (0)
 /* Acquire GIL after calling libFLAC functions */
-#define END_PROCESSING()                                \
+#define END_PROCESSING(obj)                             \
     do {                                                \
-        PyEval_RestoreThread(self->thread_state);       \
-        self->thread_state = NULL;                      \
+        PyEval_RestoreThread(obj->thread_state);        \
+        obj->thread_state = NULL;                       \
     } while (0)
 
 /* Acquire GIL before calling Python functions within callback */
-#define BEGIN_CALLBACK()                                \
+#define BEGIN_CALLBACK(obj)                             \
     do {                                                \
-        PyEval_RestoreThread(self->thread_state);       \
-        self->thread_state = NULL;                      \
+        PyEval_RestoreThread(obj->thread_state);        \
+        obj->thread_state = NULL;                       \
     } while (0)
 /* Release GIL after calling Python functions within callback */
-#define END_CALLBACK()                                  \
+#define END_CALLBACK(obj)                               \
     do {                                                \
-        assert(self->thread_state == NULL);             \
-        self->thread_state = PyEval_SaveThread();       \
+        assert(obj->thread_state == NULL);              \
+       obj->thread_state = PyEval_SaveThread();        \
     } while (0)
 
-/* Simple check to prevent calling decoder/encoder methods from
-   multiple threads, or calling methods recursively within I/O
-   callbacks. */
-
-#define BEGIN_NO_RECURSION(method_name)                                 \
+/* Begin an object method.  Raise an exception if the method is called
+   within an I/O callback, or if it is called from a second thread
+   while another method is running. */
+#define BEGIN_METHOD(obj, method_name)                                  \
     do {                                                                \
-        Py_BEGIN_CRITICAL_SECTION(self);                                \
-        if (recursion_check(&self->busy_method, method_name) == 0) {    \
-            assert(self->thread_state == NULL);                         \
+        Py_BEGIN_CRITICAL_SECTION(obj);                                 \
+        if (recursion_check(&obj->busy_method, method_name) == 0) {     \
+            assert(obj->thread_state == NULL);                          \
 
-#define END_NO_RECURSION                                                \
-            assert(self->thread_state == NULL);                         \
-            self->busy_method = NULL;                                   \
+/* End an object method started by BEGIN_METHOD. */
+#define END_METHOD(obj)                                                 \
+            assert(obj->thread_state == NULL);                          \
+            obj->busy_method = NULL;                                    \
         }                                                               \
         Py_END_CRITICAL_SECTION();                                      \
     } while (0)
+
+/* Begin a property setter.  Raise an exception if the property is
+   written while an object method is running. */
+#define BEGIN_PROPERTY_SET(obj, property) BEGIN_METHOD(obj, "." property)
+
+/* End a property setter started by BEGIN_PROPERTY_SET. */
+#define END_PROPERTY_SET(obj) END_METHOD(obj)
 
 static int
 recursion_check(const char **busy_method, const char *this_method)
@@ -279,9 +286,9 @@ recursion_check(const char **busy_method, const char *this_method)
         n = from_pyobj(value);                                          \
         if (PyErr_Occurred())                                           \
             return -1;                                                  \
-        BEGIN_NO_RECURSION("." #prop);                                  \
+        BEGIN_PROPERTY_SET(self, #prop);                                \
         ok = FLAC__stream_##obj##_set_##prop(self->obj, n);             \
-        END_NO_RECURSION;                                               \
+        END_PROPERTY_SET(self);                                         \
         if (!ok) {                                                      \
             PyErr_Format(PyExc_ValueError,                              \
                          "cannot set '%s' after open()", #prop);        \
@@ -344,7 +351,7 @@ decoder_read(const FLAC__StreamDecoder *decoder,
     PyObject *memview = NULL, *count = NULL;
     FLAC__StreamDecoderReadStatus status;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     PyErr_CheckSignals();
     if (PyErr_Occurred()) {
@@ -376,7 +383,7 @@ decoder_read(const FLAC__StreamDecoder *decoder,
     }
 
  done:
-    END_CALLBACK();
+    END_CALLBACK(self);
     return status;
 }
 
@@ -391,10 +398,10 @@ decoder_read_fd(const FLAC__StreamDecoder *decoder,
     int e;
 
     do {
-        BEGIN_CALLBACK();
+        BEGIN_CALLBACK(self);
         PyErr_CheckSignals();
         e = !!PyErr_Occurred();
-        END_CALLBACK();
+        END_CALLBACK(self);
 
         if (e)
             return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
@@ -420,11 +427,11 @@ decoder_read_fd(const FLAC__StreamDecoder *decoder,
             *bytes = 0;
             return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
         } else {
-            BEGIN_CALLBACK();
+            BEGIN_CALLBACK(self);
             errno = e;
             if (!PyErr_Occurred())
                 PyErr_SetFromErrno(PyExc_OSError);
-            END_CALLBACK();
+            END_CALLBACK(self);
             return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
         }
     } else {
@@ -445,7 +452,7 @@ decoder_seek(const FLAC__StreamDecoder *decoder,
     if (!self->seekable)
         return FLAC__STREAM_DECODER_SEEK_STATUS_UNSUPPORTED;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     if (!PyErr_Occurred()) {
         self->eof = 0;
@@ -460,7 +467,7 @@ decoder_seek(const FLAC__StreamDecoder *decoder,
     else
         status = FLAC__STREAM_DECODER_SEEK_STATUS_OK;
 
-    END_CALLBACK();
+    END_CALLBACK(self);
     return status;
 }
 
@@ -482,11 +489,11 @@ decoder_seek_fd(const FLAC__StreamDecoder *decoder,
             return FLAC__STREAM_DECODER_SEEK_STATUS_OK;
     }
     e = errno;
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
     errno = e;
     if (!PyErr_Occurred())
         PyErr_SetFromErrno(PyExc_OSError);
-    END_CALLBACK();
+    END_CALLBACK(self);
     return FLAC__STREAM_DECODER_SEEK_STATUS_ERROR;
 }
 
@@ -503,7 +510,7 @@ decoder_tell(const FLAC__StreamDecoder *decoder,
     if (!self->seekable)
         return FLAC__STREAM_DECODER_TELL_STATUS_UNSUPPORTED;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     if (!PyErr_Occurred())
         result = PyObject_CallMethod(self->fileobj, "tell", "()");
@@ -518,7 +525,7 @@ decoder_tell(const FLAC__StreamDecoder *decoder,
         status = FLAC__STREAM_DECODER_TELL_STATUS_OK;
     }
 
-    END_CALLBACK();
+    END_CALLBACK(self);
     return status;
 }
 
@@ -540,12 +547,12 @@ decoder_tell_fd(const FLAC__StreamDecoder *decoder,
         return FLAC__STREAM_DECODER_TELL_STATUS_OK;
     }
     e = errno;
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
     if (!PyErr_Occurred()) {
         errno = e;
         PyErr_SetFromErrno(PyExc_OSError);
     }
-    END_CALLBACK();
+    END_CALLBACK(self);
     return FLAC__STREAM_DECODER_TELL_STATUS_ERROR;
 }
 
@@ -562,7 +569,7 @@ decoder_length(const FLAC__StreamDecoder *decoder,
     if (!self->seekable)
         return FLAC__STREAM_DECODER_LENGTH_STATUS_UNSUPPORTED;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     if (!PyErr_Occurred())
         oldpos = PyObject_CallMethod(self->fileobj, "tell", "()");
@@ -588,7 +595,7 @@ decoder_length(const FLAC__StreamDecoder *decoder,
         status = FLAC__STREAM_DECODER_LENGTH_STATUS_OK;
     }
 
-    END_CALLBACK();
+    END_CALLBACK(self);
     return status;
 }
 
@@ -611,7 +618,7 @@ write_out_samples(DecoderObject  *self,
     unsigned int i;
 
     if (self->out_count == 0) {
-        BEGIN_CALLBACK();
+        BEGIN_CALLBACK(self);
 
         for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
             Py_CLEAR(self->out_byteobjs[i]);
@@ -627,7 +634,7 @@ write_out_samples(DecoderObject  *self,
                 (FLAC__int32 *) PyByteArray_AsString(self->out_byteobjs[i]);
         }
 
-        END_CALLBACK();
+        END_CALLBACK(self);
     }
 
     for (i = 0; i < channels; i++) {
@@ -677,16 +684,16 @@ decoder_write(const FLAC__StreamDecoder *decoder,
 
     if (buf_count > 0) {
         if (self->buf_count > 0) {
-            BEGIN_CALLBACK();
+            BEGIN_CALLBACK(self);
             if (!PyErr_Occurred())
                 PyErr_SetString(PyExc_RuntimeError,
                                 "decoder_write called multiple times");
-            END_CALLBACK();
+            END_CALLBACK(self);
             return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
         }
 
         if (buf_count > self->buf_size || !self->buf_samples[channels - 1]) {
-            BEGIN_CALLBACK();
+            BEGIN_CALLBACK(self);
             for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
                 PyMem_Free(self->buf_samples[i]);
                 self->buf_samples[i] = NULL;
@@ -699,7 +706,7 @@ decoder_write(const FLAC__StreamDecoder *decoder,
                     break;
                 }
             }
-            END_CALLBACK();
+            END_CALLBACK(self);
         }
 
         for (i = 0; i < channels; i++) {
@@ -731,7 +738,7 @@ decoder_metadata(const FLAC__StreamDecoder  *decoder,
     if (self->out_count > 0 || self->buf_count > 0)
         return;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     if (metadata && metadata->type == FLAC__METADATA_TYPE_STREAMINFO) {
         self->out_attr.channels = metadata->data.stream_info.channels;
@@ -740,7 +747,7 @@ decoder_metadata(const FLAC__StreamDecoder  *decoder,
             metadata->data.stream_info.bits_per_sample;
     }
 
-    END_CALLBACK();
+    END_CALLBACK(self);
 }
 
 static void
@@ -752,7 +759,7 @@ decoder_error(const FLAC__StreamDecoder      *decoder,
     const char *msg = FLAC__StreamDecoderErrorStatusString[status];
     PyObject *result;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     if (!PyErr_Occurred()) {
         if (self->error_callback && self->error_callback != Py_None) {
@@ -761,7 +768,7 @@ decoder_error(const FLAC__StreamDecoder      *decoder,
         }
     }
 
-    END_CALLBACK();
+    END_CALLBACK(self);
 }
 
 static void
@@ -878,7 +885,7 @@ Decoder_open(DecoderObject *self, PyObject *args)
     PyObject *seekable;
     PyObject *result = NULL;
 
-    BEGIN_NO_RECURSION("open");
+    BEGIN_METHOD(self, "open");
     if (!PyArg_ParseTuple(args, "i:open", &self->fd))
         goto done;
 
@@ -888,7 +895,7 @@ Decoder_open(DecoderObject *self, PyObject *args)
     if (PyErr_Occurred())
         goto done;
 
-    BEGIN_PROCESSING();
+    BEGIN_PROCESSING(self);
     if (self->fd >= 0)
         status = FLAC__stream_decoder_init_stream(self->decoder,
                                                   &decoder_read_fd,
@@ -911,7 +918,7 @@ Decoder_open(DecoderObject *self, PyObject *args)
                                                   &decoder_metadata,
                                                   &decoder_error,
                                                   self);
-    END_PROCESSING();
+    END_PROCESSING(self);
 
     if (status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
         PyErr_Format(get_error_type(self->module),
@@ -924,8 +931,8 @@ Decoder_open(DecoderObject *self, PyObject *args)
 
     Py_INCREF((result = Py_None));
 
- done:                                          \
-    END_NO_RECURSION;
+ done:
+    END_METHOD(self);
     return result;
 }
 
@@ -935,15 +942,15 @@ Decoder_close(DecoderObject *self, PyObject *args)
     FLAC__bool ok;
     PyObject *result = NULL;
 
-    BEGIN_NO_RECURSION("close");
+    BEGIN_METHOD(self, "close");
     if (!PyArg_ParseTuple(args, ":close"))
         goto done;
 
     decoder_clear_internal(self);
 
-    BEGIN_PROCESSING();
+    BEGIN_PROCESSING(self);
     ok = FLAC__stream_decoder_finish(self->decoder);
-    END_PROCESSING();
+    END_PROCESSING(self);
 
     if (!ok) {
         PyErr_Format(get_error_type(self->module),
@@ -954,7 +961,7 @@ Decoder_close(DecoderObject *self, PyObject *args)
     Py_INCREF((result = Py_None));
 
  done:
-    END_NO_RECURSION;
+    END_METHOD(self);
     return result;
 }
 
@@ -968,7 +975,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
     Py_ssize_t out_count, new_size;
     unsigned int i;
 
-    BEGIN_NO_RECURSION("read");
+    BEGIN_METHOD(self, "read");
     if (!PyArg_ParseTuple(args, "n:read", &limit))
         goto done;
 
@@ -978,11 +985,11 @@ Decoder_read(DecoderObject *self, PyObject *args)
     if (out_count > self->buf_count)
         out_count = self->buf_count;
     if (out_count > 0) {
-        BEGIN_PROCESSING();
+        BEGIN_PROCESSING(self);
         ok = (write_out_samples(self, self->buf_samples,
                                 self->buf_attr.channels,
                                 self->buf_start, out_count) >= 0);
-        END_PROCESSING();
+        END_PROCESSING(self);
         if (!ok)
             goto fail;
 
@@ -991,7 +998,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
         self->buf_count -= out_count;
     }
 
-    BEGIN_PROCESSING();
+    BEGIN_PROCESSING(self);
 
     while (self->out_remaining > 0 && self->buf_count == 0) {
         ok = FLAC__stream_decoder_process_single(self->decoder);
@@ -1006,7 +1013,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
             break;
     }
 
-    END_PROCESSING();
+    END_PROCESSING(self);
 
     if (PyErr_Occurred())
         goto fail;
@@ -1058,7 +1065,7 @@ Decoder_read(DecoderObject *self, PyObject *args)
     self->out_remaining = 0;
 
  done:
-    END_NO_RECURSION;
+    END_METHOD(self);
     return result;
 }
 
@@ -1069,11 +1076,11 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
     FLAC__StreamDecoderState state;
     PyObject *result = NULL;
 
-    BEGIN_NO_RECURSION("read_metadata");
+    BEGIN_METHOD(self, "read_metadata");
     if (!PyArg_ParseTuple(args, ":read_metadata"))
         goto done;
 
-    BEGIN_PROCESSING();
+    BEGIN_PROCESSING(self);
 
     ok = FLAC__stream_decoder_process_until_end_of_metadata(self->decoder);
 
@@ -1081,7 +1088,7 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
     if (state == FLAC__STREAM_DECODER_ABORTED)
         FLAC__stream_decoder_flush(self->decoder);
 
-    END_PROCESSING();
+    END_PROCESSING(self);
 
     if (PyErr_Occurred())
         goto done;
@@ -1096,7 +1103,7 @@ Decoder_read_metadata(DecoderObject *self, PyObject *args)
     Py_INCREF((result = Py_None));
 
  done:
-    END_NO_RECURSION;
+    END_METHOD(self);
     return result;
 }
 
@@ -1108,7 +1115,7 @@ Decoder_seek(DecoderObject *self, PyObject *args)
     FLAC__bool ok;
     FLAC__StreamDecoderState state;
 
-    BEGIN_NO_RECURSION("seek");
+    BEGIN_METHOD(self, "seek");
     if (!PyArg_ParseTuple(args, "O:seek", &arg))
         goto done;
     sample_number = Long_AsUint64(arg);
@@ -1117,7 +1124,7 @@ Decoder_seek(DecoderObject *self, PyObject *args)
 
     self->buf_count = 0;
 
-    BEGIN_PROCESSING();
+    BEGIN_PROCESSING(self);
 
     ok = FLAC__stream_decoder_seek_absolute(self->decoder, sample_number);
 
@@ -1126,7 +1133,7 @@ Decoder_seek(DecoderObject *self, PyObject *args)
          state == FLAC__STREAM_DECODER_SEEK_ERROR))
         FLAC__stream_decoder_flush(self->decoder);
 
-    END_PROCESSING();
+    END_PROCESSING(self);
 
     if (PyErr_Occurred())
         goto done;
@@ -1141,7 +1148,7 @@ Decoder_seek(DecoderObject *self, PyObject *args)
     Py_INCREF((result = Py_None));
 
  done:
-    END_NO_RECURSION;
+    END_METHOD(self);
     return result;
 }
 
@@ -1255,7 +1262,7 @@ encoder_write(const FLAC__StreamEncoder *encoder,
     size_t n;
     FLAC__StreamEncoderWriteStatus status;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     while (bytes > 0) {
         PyErr_CheckSignals();
@@ -1279,7 +1286,7 @@ encoder_write(const FLAC__StreamEncoder *encoder,
     else
         status = FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
 
-    END_CALLBACK();
+    END_CALLBACK(self);
     return status;
 }
 
@@ -1295,7 +1302,7 @@ encoder_seek(const FLAC__StreamEncoder *encoder,
     if (!self->seekable)
         return FLAC__STREAM_ENCODER_SEEK_STATUS_UNSUPPORTED;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     if (!PyErr_Occurred())
         dummy = PyObject_CallMethod(self->fileobj, "seek", "(K)",
@@ -1308,7 +1315,7 @@ encoder_seek(const FLAC__StreamEncoder *encoder,
     else
         status = FLAC__STREAM_ENCODER_SEEK_STATUS_OK;
 
-    END_CALLBACK();
+    END_CALLBACK(self);
     return status;
 }
 
@@ -1325,7 +1332,7 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
     if (!self->seekable)
         return FLAC__STREAM_ENCODER_TELL_STATUS_UNSUPPORTED;
 
-    BEGIN_CALLBACK();
+    BEGIN_CALLBACK(self);
 
     if (!PyErr_Occurred())
         result = PyObject_CallMethod(self->fileobj, "tell", "()");
@@ -1340,7 +1347,7 @@ encoder_tell(const FLAC__StreamEncoder *encoder,
         status = FLAC__STREAM_ENCODER_TELL_STATUS_OK;
     }
 
-    END_CALLBACK();
+    END_CALLBACK(self);
     return status;
 }
 
@@ -1429,7 +1436,7 @@ Encoder_open(EncoderObject *self, PyObject *args)
     FLAC__StreamEncoderInitStatus status;
     PyObject *seekable, *result = NULL;
 
-    BEGIN_NO_RECURSION("open");
+    BEGIN_METHOD(self, "open");
     if (!PyArg_ParseTuple(args, ":open"))
         goto done;
 
@@ -1439,13 +1446,13 @@ Encoder_open(EncoderObject *self, PyObject *args)
     if (PyErr_Occurred())
         goto done;
 
-    BEGIN_PROCESSING();
+    BEGIN_PROCESSING(self);
     status = FLAC__stream_encoder_init_stream(self->encoder,
                                               &encoder_write,
                                               &encoder_seek,
                                               &encoder_tell,
                                               NULL, self);
-    END_PROCESSING();
+    END_PROCESSING(self);
 
     if (PyErr_Occurred())
         goto done;
@@ -1460,7 +1467,7 @@ Encoder_open(EncoderObject *self, PyObject *args)
     Py_INCREF((result = Py_None));
 
  done:
-    END_NO_RECURSION;
+    END_METHOD(self);
     return result;
 }
 
@@ -1471,14 +1478,14 @@ Encoder_close(EncoderObject *self, PyObject *args)
     FLAC__StreamEncoderState state;
     FLAC__bool ok;
 
-    BEGIN_NO_RECURSION("close");
+    BEGIN_METHOD(self, "close");
     if (!PyArg_ParseTuple(args, ":close"))
         goto done;
 
 
-    BEGIN_PROCESSING();
+    BEGIN_PROCESSING(self);
     ok = FLAC__stream_encoder_finish(self->encoder);
-    END_PROCESSING();
+    END_PROCESSING(self);
 
     if (PyErr_Occurred())
         goto done;
@@ -1494,7 +1501,7 @@ Encoder_close(EncoderObject *self, PyObject *args)
     Py_INCREF((result = Py_None));
 
  done:
-    END_NO_RECURSION;
+    END_METHOD(self);
     return result;
 }
 
@@ -1509,7 +1516,7 @@ Encoder_write(EncoderObject *self, PyObject *args)
     FLAC__StreamEncoderState state;
     FLAC__bool ok;
 
-    BEGIN_NO_RECURSION("write");
+    BEGIN_METHOD(self, "write");
     if (!PyArg_ParseTuple(args, "O:write", &seq))
         goto done;
 
@@ -1559,11 +1566,11 @@ Encoder_write(EncoderObject *self, PyObject *args)
         Py_CLEAR(arrays[i]);
     }
 
-    BEGIN_PROCESSING();
+    BEGIN_PROCESSING(self);
     ok = FLAC__stream_encoder_process(self->encoder,
                                       (const FLAC__int32 **) data,
                                       nsamples);
-    END_PROCESSING();
+    END_PROCESSING(self);
 
     if (PyErr_Occurred())
         goto done;
@@ -1579,7 +1586,7 @@ Encoder_write(EncoderObject *self, PyObject *args)
     Py_INCREF((result = Py_None));
 
  done:
-    END_NO_RECURSION;
+    END_METHOD(self);
 
     for (i = 0; i < FLAC__MAX_CHANNELS; i++) {
         PyMem_Free(data[i]);
@@ -1644,9 +1651,9 @@ Encoder_compression_level_setter(EncoderObject *self, PyObject *value,
     n = Long_AsUint32(value);
     if (PyErr_Occurred())
         return -1;
-    BEGIN_NO_RECURSION(".compression_level");
+    BEGIN_PROPERTY_SET(self, "compression_level");
     ok = FLAC__stream_encoder_set_compression_level(self->encoder, n);
-    END_NO_RECURSION;
+    END_PROPERTY_SET(self);
     if (!ok) {
         PyErr_Format(PyExc_ValueError,
                      "cannot set 'compression_level' after open()");
@@ -1687,7 +1694,7 @@ Encoder_apodization_setter(EncoderObject *self, PyObject *value,
         return -1;
     }
 
-    BEGIN_NO_RECURSION(".apodization");
+    BEGIN_PROPERTY_SET(self, "apodization");
     bytes = PyUnicode_AsUTF8String(value);
     if (bytes && PyBytes_AsStringAndSize(bytes, &s, &len) == 0) {
         if (len != (Py_ssize_t) strlen(s)) {
@@ -1699,7 +1706,7 @@ Encoder_apodization_setter(EncoderObject *self, PyObject *value,
         }
     }
     Py_XDECREF(bytes);
-    END_NO_RECURSION;
+    END_PROPERTY_SET(self);
 
     if (PyErr_Occurred())
         return -1;
@@ -1741,7 +1748,7 @@ Encoder_num_threads_setter(EncoderObject *self, PyObject *value,
     if (PyErr_Occurred())
         return -1;
 #if FLAC_API_VERSION_CURRENT >= 14
-    BEGIN_NO_RECURSION(".num_threads");
+    BEGIN_PROPERTY_SET(self, "num_threads");
     if (FLAC__stream_encoder_set_num_threads(self->encoder, n) ==
         FLAC__STREAM_ENCODER_SET_NUM_THREADS_TOO_MANY_THREADS) {
 
@@ -1752,7 +1759,7 @@ Encoder_num_threads_setter(EncoderObject *self, PyObject *value,
                FLAC__STREAM_ENCODER_SET_NUM_THREADS_OK)
             i++;
     }
-    END_NO_RECURSION;
+    END_PROPERTY_SET(self);
 #else
     (void) n;
 #endif
