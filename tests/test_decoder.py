@@ -54,6 +54,20 @@ class TestDecoder(unittest.TestCase):
             with plibflac.Decoder(fileobj) as decoder:
                 self._test_read_sequential(decoder)
 
+    def test_read_buffered(self):
+        """
+        Test reading from a buffered file object.
+        """
+        with open(self.data_path('100s.flac'), 'rb') as fileobj:
+            # Read the first few bytes of the file, then rewind.
+            # Decoder should start reading at the current position in
+            # the buffered stream, not at the underlying file
+            # descriptor position.
+            fileobj.read(50)
+            fileobj.seek(0)
+            with plibflac.Decoder(fileobj) as decoder:
+                self._test_read_sequential(decoder)
+
     def test_read_bytesio(self):
         """
         Test reading from a BytesIO object.
