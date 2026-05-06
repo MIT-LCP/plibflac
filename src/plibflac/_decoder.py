@@ -138,7 +138,7 @@ class Decoder:
                       and isinstance(self._fileobj.raw, io.FileIO)
                       and self._fileobj.seekable()):
                     fd = self._fileobj.fileno()
-                    self._fileobj.seek(0, io.SEEK_CUR)
+                    self._fileobj.raw.seek(self._fileobj.tell())
                 else:
                     fd = -1
             except OSError:
