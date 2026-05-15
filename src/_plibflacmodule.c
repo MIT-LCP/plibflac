@@ -1,11 +1,11 @@
+#include <Python.h>
+#include <structmember.h>
+
 #include <assert.h>
 #include <errno.h>
 #include <stddef.h>
 #include <string.h>
 #include <limits.h>
-
-#include <Python.h>
-#include <structmember.h>
 
 #include <FLAC/stream_decoder.h>
 #include <FLAC/stream_encoder.h>
