@@ -68,6 +68,26 @@ class TestDecoder(unittest.TestCase):
             with plibflac.Decoder(fileobj) as decoder:
                 self._test_read_sequential(decoder)
 
+        with open(self.data_path('100s.flac'), 'rb') as fileobj:
+            # Check that buffered file object is correctly
+            # resynchronized after the decoder is closed.
+            fileobj.read(50)
+            fileobj.seek(0)
+            with plibflac.Decoder(fileobj) as decoder:
+                decoder.read(5000)
+            next_pos1 = fileobj.tell()
+            next_bytes1 = fileobj.read(100)
+
+            fileobj = fileobj.raw
+            fileobj.seek(0)
+            with plibflac.Decoder(fileobj) as decoder:
+                decoder.read(5000)
+            next_pos2 = fileobj.tell()
+            next_bytes2 = fileobj.read(100)
+
+        self.assertEqual(next_pos1, next_pos2)
+        self.assertEqual(next_bytes1, next_bytes2)
+
     def test_read_bytesio(self):
         """
         Test reading from a BytesIO object.
