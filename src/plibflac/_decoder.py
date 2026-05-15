@@ -130,6 +130,7 @@ class Decoder:
         has already been opened, this method does nothing.
         """
         if not self._opened:
+            self._original_raw_pos = None
             try:
                 if isinstance(self._fileobj, io.FileIO):
                     fd = self._fileobj.fileno()
@@ -138,7 +139,12 @@ class Decoder:
                       and isinstance(self._fileobj.raw, io.FileIO)
                       and self._fileobj.seekable()):
                     fd = self._fileobj.fileno()
-                    self._fileobj.seek(0, io.SEEK_CUR)
+                    # Set the raw stream position (where we will begin
+                    # decoding) to the current buffered stream
+                    # position.  Save the original raw stream position
+                    # for later use.
+                    self._original_raw_pos = self._fileobj.raw.tell()
+                    self._fileobj.raw.seek(self._fileobj.tell())
                 else:
                     fd = -1
             except OSError:
@@ -168,6 +174,16 @@ class Decoder:
             if self._opened:
                 self._opened = False
                 self._decoder.close()
+                if self._original_raw_pos is not None:
+                    # Set the buffered stream position equal to the
+                    # current raw stream position (where we finished
+                    # decoding).  In order to ensure the internal
+                    # state of the BufferedReader is consistent, we
+                    # must first restore the raw stream to the
+                    # position it had originally.
+                    final_pos = self._fileobj.raw.tell()
+                    self._fileobj.raw.seek(self._original_raw_pos)
+                    self._fileobj.seek(final_pos)
         finally:
             if self._closefile:
                 self._closefile = False
