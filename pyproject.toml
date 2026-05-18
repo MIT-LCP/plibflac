@@ -1,6 +1,6 @@
 [project]
 name        = "plibflac"
-version     = "1.0.0"
+version     = "1.0.1"
 description = "Read and write FLAC audio files"
 readme      = "README.md"
 authors     = [
